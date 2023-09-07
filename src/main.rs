@@ -3,10 +3,13 @@ use std::ops::{Add, AddAssign};
 use std::str::FromStr;
 use std::time::Duration;
 use std::{io, thread};
+use std::cmp::Ordering;
+use rand::prelude::*;
+use rand::distributions::WeightedIndex;
 
 use rand::Rng;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Suit {
     Clubs,
     Diamonds,
@@ -15,9 +18,21 @@ enum Suit {
 }
 
 impl Suit {
+    #[allow(dead_code)]
     fn random() -> Self {
-        let mut rng = rand::thread_rng();
-        match rng.gen_range(0..=3) {
+        let ordinal = thread_rng().gen_range(0..=3);
+        Suit::from_ordinal(ordinal)
+    }
+    fn ordinal(&self) -> usize {
+        match self {
+            Suit::Clubs => 0,
+            Suit::Diamonds => 1,
+            Suit::Hearts => 2,
+            Suit::Spades => 3,
+        }
+    }
+    fn from_ordinal(ordinal: usize) -> Self {
+        match ordinal {
             0 => Suit::Clubs,
             1 => Suit::Diamonds,
             2 => Suit::Hearts,
@@ -27,7 +42,7 @@ impl Suit {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum Rank {
     Two,
     Three,
@@ -45,9 +60,30 @@ enum Rank {
 }
 
 impl Rank {
+    #[allow(dead_code)]
     fn random() -> Self {
-        let mut rng = rand::thread_rng();
-        match rng.gen_range(0..=12) {
+        let ordinal = thread_rng().gen_range(0..=12);
+        Rank::from_ordinal(ordinal)
+    }
+    fn ordinal(&self) -> usize {
+        match self {
+            Rank::Two => 0,
+            Rank::Three => 1,
+            Rank::Four => 2,
+            Rank::Five => 3,
+            Rank::Six => 4,
+            Rank::Seven => 5,
+            Rank::Eight => 6,
+            Rank::Nine => 7,
+            Rank::Ten => 8,
+            Rank::Jack => 9,
+            Rank::Queen => 10,
+            Rank::King => 11,
+            Rank::Ace => 12,
+        }
+    }
+    fn from_ordinal(ordinal: usize) -> Self {
+        match ordinal {
             0 => Rank::Two,
             1 => Rank::Three,
             2 => Rank::Four,
@@ -61,7 +97,7 @@ impl Rank {
             10 => Rank::Queen,
             11 => Rank::King,
             12 => Rank::Ace,
-            _ => unreachable!(),
+            _ => panic!("Invalid ordinal"),
         }
     }
     fn value(&self) -> u8 {
@@ -80,6 +116,12 @@ impl Rank {
             Rank::King => 10,
             Rank::Ace => 11,
         }
+    }
+}
+
+impl PartialOrd for Rank {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.value().cmp(&other.value()))
     }
 }
 
@@ -117,6 +159,7 @@ impl Add for Rank {
     }
 }
 
+#[derive(Debug, PartialEq)]
 struct Card {
     rank: Rank,
     suit: Suit,
@@ -124,14 +167,27 @@ struct Card {
 
 impl Card {
     fn random() -> Self {
-        let rank = Rank::random();
-        let suit = Suit::random();
+        let ordinal = thread_rng().gen_range(0..=51);
+        Card::from_ordinal(ordinal)
+    }
+    fn ordinal(&self) -> usize {
+        self.rank.ordinal() * 4 + self.suit.ordinal()
+    }
+    fn from_ordinal(ordinal: usize) -> Self {
+        let rank = Rank::from_ordinal(ordinal / 4);
+        let suit = Suit::from_ordinal(ordinal % 4);
         Card { rank, suit }
     }
     #[allow(dead_code)]
     fn with_rank(rank: Rank) -> Self {
         let suit = Suit::random();
         Card { rank, suit }
+    }
+}
+
+impl PartialOrd for Card {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.ordinal().cmp(&other.ordinal()))
     }
 }
 
@@ -286,19 +342,84 @@ impl Display for Hand {
     }
 }
 
+trait Shoe {
+    fn draw(&mut self) -> Card;
+    fn shuffle(&mut self);
+
+    fn draw_player(&mut self) -> PlayerCard {
+        thread::sleep(Duration::from_secs(1));
+        let card = self.draw();
+        println!("You draw {card}.");
+        PlayerCard(card)
+    }
+    fn draw_dealer(&mut self, hidden: bool) -> DealerCard {
+        thread::sleep(Duration::from_secs(1));
+        let card = self.draw();
+        if hidden {
+            println!("The dealer draws a hidden card.");
+        } else {
+            println!("The dealer draws {card}.");
+        }
+        DealerCard(card)
+    }
+}
+
+struct MultiDeck {
+    size: u8,
+    dist: WeightedIndex<u8>,
+    remaining: [u8; 52],
+}
+
+impl MultiDeck {
+    fn with_size(size: u8) -> Self {
+        let remaining = [size; 52];
+        let dist = WeightedIndex::new(&remaining).unwrap();
+        MultiDeck { size, dist, remaining }
+    }
+}
+
+impl Shoe for MultiDeck {
+    fn draw(&mut self) -> Card {
+        let ordinal = self.dist.sample(&mut thread_rng());
+        let new_weight = self.remaining[ordinal] - 1;
+        self.dist.update_weights(&[(ordinal, &new_weight)]).unwrap();
+        Card::from_ordinal(ordinal)
+    }
+    fn shuffle(&mut self) {
+        self.remaining = [self.size; 52];
+        self.dist = WeightedIndex::new(&self.remaining).unwrap();
+    }
+}
+
+struct InfiniteDeck;
+
+impl Shoe for InfiniteDeck {
+    fn draw(&mut self) -> Card {
+        Card::random()
+    }
+    fn shuffle(&mut self) {
+        // Do nothing
+    }
+}
+
 fn main() {
+    let deck = MultiDeck::with_size(8);
+    play(deck);
+}
+
+fn play(mut deck: impl Shoe) {
     let mut player_chips = 1000;
     'game: while let Some(mut bet) = place_bet(player_chips) {
         player_chips -= bet;
         println!("You bet {bet} chips. You have {player_chips} chips remaining.");
 
-        let player_card = draw_player_card();
-        let dealer_card = draw_dealer_card(false);
+        let player_card = deck.draw_player();
+        let dealer_card = deck.draw_dealer(false);
 
-        let player_hand = player_card + draw_player_card();
+        let player_hand = player_card + deck.draw_player();
 
         if player_hand.is_21() {
-            let dealer_hand = dealer_card + draw_dealer_card(false);
+            let dealer_hand = dealer_card + deck.draw_dealer(false);
             if dealer_hand.is_21() {
                 reveal_dealer_hand(&dealer_hand);
                 println!("The dealer also has blackjack!");
@@ -311,7 +432,7 @@ fn main() {
             continue 'game;
         }
 
-        let mut dealer_hand = dealer_card + draw_dealer_card(true);
+        let mut dealer_hand = dealer_card + deck.draw_dealer(true);
 
         let dealer_showing = dealer_hand.cards[0].rank.value();
         if dealer_showing == 10 || dealer_showing == 11 {
@@ -338,20 +459,20 @@ fn main() {
                 }
                 Action::Hit => {
                     println!("You hit!");
-                    *hand += draw_player_card();
+                    *hand += deck.draw_player();
                 }
                 Action::DoubleDown => {
                     println!("You double and put another {bet} chips down!");
                     player_chips -= bet;
                     bet *= 2; // Double the bet for this hand
-                    *hand += draw_player_card();
+                    *hand += deck.draw_player();
                     hand.done = true;
                 }
                 Action::Split => {
                     println!("You split your hand into two and put another {bet} chips down!");
                     player_chips -= bet; // Do not double the bet, each hand is worth the original bet
-                    let right = hand.split_and_replace(draw_player_card());
-                    let right_hand = right + draw_player_card();
+                    let right = hand.split_and_replace(deck.draw_player());
+                    let right_hand = right + deck.draw_player();
                     hands.push(right_hand);
                 }
             }
@@ -365,7 +486,7 @@ fn main() {
         if hands.iter().any(|hand| !hand.is_bust()) {
             // At least one hand is not bust
             while !dealer_hand.done {
-                dealer_hand += draw_dealer_card(false);
+                dealer_hand += deck.draw_dealer(false);
                 if dealer_hand.total >= 17 {
                     dealer_hand.done = true;
                 }
@@ -413,24 +534,6 @@ fn place_bet(chips: u32) -> Option<u32> {
         }
         bet.clear();
     }
-}
-
-fn draw_player_card() -> PlayerCard {
-    thread::sleep(Duration::from_secs(1));
-    let card = Card::random();
-    println!("You draw {card}.");
-    PlayerCard(card)
-}
-
-fn draw_dealer_card(hidden: bool) -> DealerCard {
-    thread::sleep(Duration::from_secs(1));
-    let card = Card::random();
-    if hidden {
-        println!("The dealer draws a hidden card.");
-    } else {
-        println!("The dealer draws {card}.");
-    }
-    DealerCard(card)
 }
 
 fn reveal_dealer_hand(hand: &Hand) {
