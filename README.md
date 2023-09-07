@@ -1,18 +1,22 @@
 # Blackjack
 
-This is a simple command-line blackjack game that I made in Rust.
+This is a simple command-line Blackjack game that I made in Rust.
 
 ## Features
 
-- [x] Basic blackjack gameplay
+- [x] Basic Blackjack gameplay
 - [x] Betting
 - [x] Doubling down
 - [x] Splitting (infinitely many times)
+- [x] Configurable number of decks
+- [x] Configurable dealer strategy
+- [x] Configurable starting chips
 
 ## TODOs
 
 - [ ] Surrendering (early and late)
 - [ ] Insurance (even though it's a bad idea)
-- [ ] Advanced decks and re-shuffling (currently completely random card draws)
-- [ ] Configure dealer strategy (currently stands on soft 17)
-- [ ] Configure starting chips (currently 1000)
+- [ ] Configurable Blackjack payout (currently 3:2)
+- [ ] Configurable double after split
+- [ ] Configurable resplitting aces
+- [ ] Multiplayer support
