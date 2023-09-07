@@ -5,7 +5,7 @@ use std::time::Duration;
 use std::{io, thread};
 use std::cmp::Ordering;
 use rand::prelude::*;
-use rand::distributions::WeightedIndex;
+use rand::distributions::{Standard, WeightedIndex};
 
 use rand::Rng;
 use crate::{Blackjack, BlackjackPayout, ShuffleStrategy, Soft17};
@@ -18,12 +18,13 @@ enum Suit {
     Spades,
 }
 
-impl Suit {
-    #[allow(dead_code)]
-    fn random() -> Self {
-        let ordinal = thread_rng().gen_range(0..=3);
-        Suit::from_ordinal(ordinal)
+impl Distribution<Suit> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Suit {
+        Suit::from_ordinal(rng.gen_range(0..=3))
     }
+}
+
+impl Suit {
     fn from_ordinal(ordinal: usize) -> Self {
         match ordinal {
             0 => Suit::Clubs,
@@ -52,12 +53,13 @@ enum Rank {
     Ace,   // 11/1
 }
 
-impl Rank {
-    #[allow(dead_code)]
-    fn random() -> Self {
-        let ordinal = thread_rng().gen_range(0..=12);
-        Rank::from_ordinal(ordinal)
+impl Distribution<Rank> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rank {
+        Rank::from_ordinal(rng.gen_range(0..=12))
     }
+}
+
+impl Rank {
     fn from_ordinal(ordinal: usize) -> Self {
         match ordinal {
             0 => Rank::Two,
@@ -141,29 +143,25 @@ struct Card {
     suit: Suit,
 }
 
+impl Distribution<Card> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Card {
+        Card::from_ordinal(rng.gen_range(0..=51))
+    }
+}
+
 impl Card {
-    fn random() -> Self {
-        let ordinal = thread_rng().gen_range(0..=51);
-        Card::from_ordinal(ordinal)
-    }
-    fn ordinal(&self) -> usize {
-        self.rank as usize * 4 + self.suit as usize // Use casting to convert enum to ordinal
-    }
     fn from_ordinal(ordinal: usize) -> Self {
         let rank = Rank::from_ordinal(ordinal / 4);
         let suit = Suit::from_ordinal(ordinal % 4);
-        Card { rank, suit }
-    }
-    #[allow(dead_code)]
-    fn with_rank(rank: Rank) -> Self {
-        let suit = Suit::random();
         Card { rank, suit }
     }
 }
 
 impl PartialOrd for Card {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.ordinal().cmp(&other.ordinal()))
+        let self_ordinal = self.rank as usize * 4 + self.suit as usize;
+        let other_ordinal = other.rank as usize * 4 + other.suit as usize;
+        Some(self_ordinal.cmp(&other_ordinal))
     }
 }
 
@@ -196,6 +194,7 @@ impl Add<DealerCard> for DealerCard {
     }
 }
 
+/// The player's first two cards are added together to form a hand
 impl Add<PlayerCard> for PlayerCard {
     type Output = Hand;
 
@@ -421,7 +420,7 @@ struct InfiniteDeck;
 
 impl Shoe for InfiniteDeck {
     fn draw(&mut self) -> Card {
-        Card::random()
+        random()
     }
     fn shuffle_if_needed(&mut self) {
         // Do nothing
