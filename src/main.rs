@@ -8,12 +8,15 @@ pub struct Blackjack {
     /// Number of decks to use. Defaults to infinite.
     #[arg(long, short)]
     pub decks: Option<u8>,
-    /// When to shuffle the deck. Defaults to `EveryRound`.
-    #[arg(long, short, value_enum, default_value_t = ShuffleStrategy::EveryRound)]
+    /// When to shuffle the deck. This has no effect if `decks` is not set.
+    #[arg(long, short, value_enum, default_value_t = ShuffleStrategy::Continuous)]
     pub shuffle: ShuffleStrategy,
-    /// Dealer strategy. Defaults to `Soft17`.
-    #[arg(long, value_enum, default_value_t = StandOn::Soft17)]
-    pub dealer: StandOn,
+    /// Dealer strategy on soft 17s.
+    #[arg(long, value_enum, default_value_t = Soft17::Stand)]
+    pub soft17: Soft17,
+    /// Blackjack payout. Defaults to `ThreeToTwo`.
+    #[arg(long, short, value_enum, default_value_t = BlackjackPayout::ThreeToTwo)]
+    pub payout: BlackjackPayout,
     /// Number of chips to start with. Defaults to 1000.
     #[arg(short, long, default_value_t = 1000)]
     pub chips: u32,
@@ -27,24 +30,38 @@ pub struct Blackjack {
     #[arg(long, default_value_t = false)]
     pub surrender: bool, // TODO: Implement
     /// Whether to offer insurance. Defaults to false.
-    #[arg(long, default_value_t = false)]
+    #[arg(long, short, default_value_t = false)]
     pub insurance: bool, // TODO: Implement
 }
 
 #[derive(Debug, Clone, PartialEq, ValueEnum)]
 pub enum ShuffleStrategy {
-    /// Shuffle the deck after every round.
-    EveryRound,
-    // TODO: Implement more strategies
-    // (e.g. after a certain number of rounds, after a certain number of cards, etc.)
+    /// Shuffle the shoe after every round. Worst for counting cards.
+    Continuous,
+    /// Shuffle when the shoe is a quarter empty.
+    QuarterShoe,
+    /// Shuffle when the shoe is half empty.
+    HalfShoe,
+    /// Shuffle when the shoe is three quarters empty.
+    ThreeQuartersShoe,
+    /// Shuffle when the shoe is empty. Best for counting cards.
+    EmptyShoe,
+}
+
+#[derive(Debug, Clone, PartialEq, ValueEnum)]
+pub enum Soft17 {
+    /// Dealer stands on soft 17.
+    Stand,
+    /// Dealer hits on soft 17.
+    Hit,
 }
 
 #[derive(Debug, Clone, ValueEnum)]
-pub enum StandOn {
-    /// Dealer stands on soft 17.
-    Soft17,
-    /// Dealer hits on soft 17.
-    Hard17,
+pub enum BlackjackPayout {
+    /// Blackjack pays 3:2.
+    ThreeToTwo,
+    /// Blackjack pays 6:5.
+    SixToFive,
 }
 
 fn main() {

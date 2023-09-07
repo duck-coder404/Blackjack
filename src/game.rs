@@ -8,7 +8,7 @@ use rand::prelude::*;
 use rand::distributions::WeightedIndex;
 
 use rand::Rng;
-use crate::{Blackjack, ShuffleStrategy, StandOn};
+use crate::{Blackjack, BlackjackPayout, ShuffleStrategy, Soft17};
 
 #[derive(Debug, PartialEq)]
 enum Suit {
@@ -287,10 +287,20 @@ struct Hand {
     done: bool, // stand or bust, cannot hit anymore
 }
 
+enum HandStatus {
+    Ok(u8),
+    Blackjack,
+    Bust,
+}
+
+enum HandResult {
+    Blackjack,
+    Win,
+    Push,
+    Lose,
+}
+
 impl Hand {
-    fn is_blackjack(&self) -> bool {
-        self.is_21() && self.is_two_cards()
-    }
     fn is_21(&self) -> bool {
         self.total == 21
     }
@@ -314,19 +324,28 @@ impl Hand {
         *self += card;
         PlayerCard(right)
     }
-    fn winnings_against(&self, dealer_hand: &Hand, bet: u32) -> u32 {
-        // Dealer is not blackjack
-        if self.is_blackjack() {
-            bet * 5 / 2
+    fn status(&self) -> HandStatus {
+        if self.is_21() && self.is_two_cards() {
+            HandStatus::Blackjack
         } else if self.is_bust() {
-            0
-        } else if dealer_hand.is_bust() {
-            bet * 2
+            HandStatus::Bust
         } else {
-            match self.total.cmp(&dealer_hand.total) {
-                Ordering::Less => 0,
-                Ordering::Equal => bet,
-                Ordering::Greater => bet * 2,
+            HandStatus::Ok(self.total)
+        }
+    }
+    fn against(&self, dealer: &Hand) -> HandResult {
+        match (self.status(), dealer.status()) {
+            (HandStatus::Blackjack, HandStatus::Blackjack) => HandResult::Push,
+            (HandStatus::Blackjack, _) => HandResult::Blackjack,
+            (_, HandStatus::Blackjack) => HandResult::Lose,
+            (HandStatus::Bust, _) => HandResult::Lose,
+            (_, HandStatus::Bust) => HandResult::Win,
+            (HandStatus::Ok(player_total), HandStatus::Ok(dealer_total)) => {
+                match player_total.cmp(&dealer_total) {
+                    Ordering::Less => HandResult::Lose,
+                    Ordering::Equal => HandResult::Push,
+                    Ordering::Greater => HandResult::Win,
+                }
             }
         }
     }
@@ -345,7 +364,8 @@ impl Display for Hand {
 
 trait Shoe {
     fn draw(&mut self) -> Card;
-    fn shuffle(&mut self);
+    fn shuffle_if_needed(&mut self);
+    fn shuffle(&mut self) {}
 
     fn draw_player(&mut self) -> PlayerCard {
         thread::sleep(Duration::from_secs(1));
@@ -369,24 +389,54 @@ struct MultiDeck {
     size: u8,
     dist: WeightedIndex<u8>,
     remaining: [u8; 52],
+    shuffle_strategy: ShuffleStrategy,
 }
 
 impl MultiDeck {
-    fn with_size(size: u8) -> Self {
+    fn new(size: u8, shuffle_strategy: ShuffleStrategy) -> Self {
         let remaining = [size; 52];
         let dist = WeightedIndex::new(remaining).unwrap();
-        MultiDeck { size, dist, remaining }
+        MultiDeck { size, dist, remaining, shuffle_strategy }
     }
 }
 
 impl Shoe for MultiDeck {
     fn draw(&mut self) -> Card {
         let ordinal = self.dist.sample(&mut thread_rng());
-        let new_weight = self.remaining[ordinal] - 1;
-        self.dist.update_weights(&[(ordinal, &new_weight)]).unwrap();
+        self.remaining[ordinal] -= 1;
+        let new_weight = self.remaining[ordinal];
+        if self.dist.update_weights(&[(ordinal, &new_weight)]).is_err() {
+            println!("The shoe is empty. Shuffling...");
+            self.shuffle();
+        }
         Card::from_ordinal(ordinal)
     }
+    fn shuffle_if_needed(&mut self) {
+        match self.shuffle_strategy {
+            ShuffleStrategy::Continuous => self.shuffle(),
+            ShuffleStrategy::QuarterShoe => if count(&self.remaining) <= self.size as u16 * 39 {
+                println!("The shoe is a quarter empty. Shuffling...");
+                self.shuffle();
+            },
+            ShuffleStrategy::HalfShoe => if count(&self.remaining) <= self.size as u16 * 26 {
+                println!("The shoe is half empty. Shuffling...");
+                self.shuffle();
+            },
+            ShuffleStrategy::ThreeQuartersShoe => if count(&self.remaining) <= self.size as u16 * 13 {
+                println!("The shoe is three quarters empty. Shuffling...");
+                self.shuffle();
+            },
+            ShuffleStrategy::EmptyShoe => if count(&self.remaining) <= 1 {
+                println!("The shoe is empty. Shuffling...");
+                self.shuffle();
+            },
+        }
+        fn count(remaining: &[u8; 52]) -> u16 {
+            remaining.iter().map(|&x| x as u16).sum()
+        }
+    }
     fn shuffle(&mut self) {
+        thread::sleep(Duration::from_secs(2));
         self.remaining = [self.size; 52];
         self.dist = WeightedIndex::new(self.remaining).unwrap();
     }
@@ -398,7 +448,7 @@ impl Shoe for InfiniteDeck {
     fn draw(&mut self) -> Card {
         Card::random()
     }
-    fn shuffle(&mut self) {
+    fn shuffle_if_needed(&mut self) {
         // Do nothing
     }
 }
@@ -406,11 +456,11 @@ impl Shoe for InfiniteDeck {
 pub fn play(config: Blackjack) {
     println!("Welcome to Blackjack!");
     let mut deck: Box<dyn Shoe> = match config.decks {
-        Some(decks) => Box::new(MultiDeck::with_size(decks)),
+        Some(decks) => Box::new(MultiDeck::new(decks, config.shuffle)),
         None => Box::new(InfiniteDeck),
     };
     let mut player_chips = config.chips;
-    'game: while let Some(mut bet) = place_bet(player_chips, config.max_bet, config.min_bet) {
+    while let Some(mut bet) = place_bet(player_chips, config.max_bet, config.min_bet) {
         player_chips -= bet;
         println!("You bet {bet} chips. You have {player_chips} chips remaining.");
 
@@ -418,96 +468,87 @@ pub fn play(config: Blackjack) {
         let dealer_card = deck.draw_dealer(false);
 
         let player_hand = player_card + deck.draw_player();
-
-        // TODO: Remove this pre-check, this can be handled later with the normal logic
-        if player_hand.is_21() {
-            let dealer_hand = dealer_card + deck.draw_dealer(false);
-            if dealer_hand.is_21() {
-                reveal_dealer_hand(&dealer_hand);
-                println!("The dealer also has blackjack!");
-                println!("It's a push!");
-                player_chips += bet;
-                continue 'game;
-            }
-            println!("You win {} chips!", bet * 5 / 2);
-            player_chips += bet * 5 / 2;
-            continue 'game;
-        }
-
         let mut dealer_hand = dealer_card + deck.draw_dealer(true);
 
         let dealer_showing = dealer_hand.cards[0].rank.value();
+        // In reality, the dealer would check for blackjack here
         if dealer_showing == 10 || dealer_showing == 11 {
             println!("The dealer checks their cards...");
         }
 
-        // TODO: Can probably handle this with the normal logic too
-        if dealer_hand.is_21() {
-            reveal_dealer_hand(&dealer_hand);
-            println!("The dealer has blackjack! You lose!");
-            continue 'game;
-        }
-
+        // The player may now play their hand(s) (skip if dealer has blackjack)
         let mut hands = vec![player_hand];
-        while let Some(hand) = hands.iter_mut().find(|hand| !hand.done) {
-            println!(
-                "What would you like to do? ({} against {})",
-                hand,
-                dealer_hand.cards[0].rank.value()
-            );
-            match player_action(hand, bet <= player_chips) {
-                Action::Stand => {
-                    println!("You stand!");
-                    hand.done = true;
-                }
-                Action::Hit => {
-                    println!("You hit!");
-                    *hand += deck.draw_player();
-                }
-                Action::DoubleDown => {
-                    println!("You double and put another {bet} chips down!");
-                    player_chips -= bet;
-                    bet *= 2; // Double the bet for this hand
-                    *hand += deck.draw_player();
-                    hand.done = true;
-                }
-                Action::Split => {
-                    println!("You split your hand into two and put another {bet} chips down!");
-                    player_chips -= bet; // Do not double the bet, each hand is worth the original bet
-                    let right = hand.split_and_replace(deck.draw_player());
-                    let right_hand = right + deck.draw_player();
-                    hands.push(right_hand);
+        if !dealer_hand.is_21() {
+            while let Some(hand) = hands.iter_mut().find(|hand| !hand.done) {
+                println!(
+                    "What would you like to do? ({} against {})",
+                    hand,
+                    dealer_hand.cards[0].rank.value()
+                );
+                match player_action(hand, bet <= player_chips) {
+                    Action::Stand => {
+                        println!("You stand!");
+                        hand.done = true;
+                    }
+                    Action::Hit => {
+                        println!("You hit!");
+                        *hand += deck.draw_player();
+                    }
+                    Action::DoubleDown => {
+                        println!("You double and put another {bet} chips down!");
+                        player_chips -= bet;
+                        // FIXME: If this is a split hand the doubled bet will apply to both the player's hands
+                        bet *= 2; // Double the bet for this hand
+                        *hand += deck.draw_player();
+                        hand.done = true;
+                    }
+                    Action::Split => {
+                        println!("You split your hand into two and put another {bet} chips down!");
+                        player_chips -= bet; // Do not double the bet, each hand is worth the original bet
+                        let right = hand.split_and_replace(deck.draw_player());
+                        let right_hand = right + deck.draw_player();
+                        hands.push(right_hand);
+                    }
                 }
             }
         }
 
-        // Probably unnecessary after the loop, but this is a good sanity check
-        // TODO: Remove this and still feel confident
-        assert!(hands.iter().all(|hand| hand.done));
-
-        reveal_dealer_hand(&dealer_hand);
-        println!("The dealer has {}.", dealer_hand.total);
+        // At this point, all player hands are done and the dealer reveals their second card
+        thread::sleep(Duration::from_secs(1));
+        println!("The dealer reveals {}.", dealer_hand.cards[1]);
+        if dealer_hand.is_21() {
+            println!("The dealer has blackjack!");
+        } else {
+            println!("The dealer has {}.", dealer_hand.total);
+        }
 
         if hands.iter().any(|hand| !hand.is_bust()) {
             // At least one hand is not bust, so the dealer must play
-            while !dealer_hand.done {
+            while !dealer_hand.done { // Keep drawing cards until the dealer is done
                 dealer_hand += deck.draw_dealer(false);
 
-                if dealer_hand.total < 17 {
-                    continue;
-                }
-                match &config.dealer {
-                    StandOn::Soft17 => dealer_hand.done = true,
-                    StandOn::Hard17 => if !dealer_hand.soft || dealer_hand.total > 17 {
-                        dealer_hand.done = true;
-                    },
+                match (dealer_hand.soft, dealer_hand.total) {
+                    (_, total) if total < 17 => {}
+                    (true, 17) if config.soft17 == Soft17::Hit => {} // Soft 17 hit if config says so
+                    _ => dealer_hand.done = true, // Dealer stands
                 }
             }
         }
 
+        // At this point, all hands are done
+        // For each hand, determine the result and payout
         let chips_won: u32 = hands
             .into_iter()
-            .map(|hand| hand.winnings_against(&dealer_hand, bet))
+            .map(|hand| hand.against(&dealer_hand))
+            .map(|result| match result {
+                HandResult::Blackjack => match config.payout {
+                    BlackjackPayout::ThreeToTwo => bet + bet * 3 / 2,
+                    BlackjackPayout::SixToFive => bet + bet * 6 / 5,
+                },
+                HandResult::Win => bet + bet,
+                HandResult::Push => bet,
+                HandResult::Lose => 0,
+            })
             .sum();
 
         match chips_won {
@@ -517,10 +558,7 @@ pub fn play(config: Blackjack) {
             chips => println!("You win {chips} chips!"),
         }
         player_chips += chips_won;
-        // FIXME: Any place with continue 'game will skip this
-        if config.shuffle == ShuffleStrategy::EveryRound {
-            deck.shuffle();
-        }
+        deck.shuffle_if_needed();
     }
     println!("You finished with {player_chips} chips.");
     println!("Goodbye!");
@@ -557,11 +595,6 @@ fn place_bet(chips: u32, max_bet: Option<u32>, min_bet: Option<u32>) -> Option<u
         }
         bet.clear();
     }
-}
-
-fn reveal_dealer_hand(hand: &Hand) {
-    thread::sleep(Duration::from_secs(1));
-    println!("The dealer reveals a {}.", hand.cards[1]);
 }
 
 enum Action {
