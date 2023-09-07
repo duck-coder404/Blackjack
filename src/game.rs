@@ -97,6 +97,8 @@ impl Rank {
     }
 }
 
+/// Ranks are partially ordered by their game value
+/// e.g. Two is 2, Ten, Jack, Queen, and King are 10, Ace is 11
 impl PartialOrd for Rank {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.value().cmp(&other.value()))
@@ -123,6 +125,9 @@ impl Display for Rank {
     }
 }
 
+/// The sum of two ranks is a tuple of (soft, total)
+/// soft is true if the hand contains an ace that is worth 11
+/// total is the total value of the hand <= 21
 impl Add for Rank {
     type Output = (bool, u8); // (soft, total)
 
@@ -157,6 +162,7 @@ impl Card {
     }
 }
 
+/// Cards are ordered by their ordinal, e.g. Two of Clubs is 0, Ace of Spades is 51
 impl PartialOrd for Card {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let self_ordinal = self.rank as usize * 4 + self.suit as usize;
@@ -165,6 +171,7 @@ impl PartialOrd for Card {
     }
 }
 
+/// Cards are displayed as "a Rank of Suit", e.g. "a Two of Clubs"
 impl Display for Card {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{} of {:?}", self.rank, self.suit)
@@ -174,6 +181,8 @@ impl Display for Card {
 struct DealerCard(Card);
 struct PlayerCard(Card);
 
+/// The dealer's first two cards are added together to form a hand
+/// This does not announce the total, as the second card is still hidden
 impl Add<DealerCard> for DealerCard {
     type Output = Hand;
 
@@ -190,11 +199,12 @@ impl Add<DealerCard> for DealerCard {
             soft,
             total,
             done: total >= 17,
-        } // Dealer stands on 17
+        }
     }
 }
 
 /// The player's first two cards are added together to form a hand
+/// The total is announced immediately
 impl Add<PlayerCard> for PlayerCard {
     type Output = Hand;
 
@@ -218,6 +228,9 @@ impl Add<PlayerCard> for PlayerCard {
     }
 }
 
+/// Macro for generating the AddAssign implementation of PlayerCard and DealerCard for Hand
+/// This allows us to add a card to a hand and update the total
+/// It also announces the new total and busts if the total is over 21
 macro_rules! add_assign_impl {
     ($t:ty, $normal:expr, $bust:expr) => {
         impl AddAssign<$t> for Hand {
@@ -261,12 +274,15 @@ struct Hand {
     done: bool, // stand or bust, cannot hit anymore
 }
 
+/// The status of a hand is either Ok(total), Blackjack, or Bust
 enum HandStatus {
     Ok(u8),
     Blackjack,
     Bust,
 }
 
+/// A hand can be compared to another hand to determine the result
+/// Blackjack is a special kind of win, as it pays more
 enum HandResult {
     Blackjack,
     Win,
@@ -287,6 +303,9 @@ impl Hand {
     fn is_pair(&self) -> bool {
         self.is_two_cards() && self.cards[0].rank == self.cards[1].rank
     }
+    /// Splits the hand
+    /// The card taken from this hand is replaced with the given card, so we still have two cards
+    /// The card taken from this hand is returned, so it can be used to create a new hand
     fn split_and_replace(&mut self, card: PlayerCard) -> PlayerCard {
         assert!(self.is_pair(), "Cannot split hand that is not a pair");
         let right = self.cards.pop().unwrap();
@@ -298,6 +317,7 @@ impl Hand {
         *self += card;
         PlayerCard(right)
     }
+    /// Returns the status of the hand
     fn status(&self) -> HandStatus {
         if self.is_21() && self.is_two_cards() {
             HandStatus::Blackjack
@@ -307,6 +327,7 @@ impl Hand {
             HandStatus::Ok(self.total)
         }
     }
+    /// Compares the hand to the dealer's hand to determine the result
     fn against(&self, dealer: &Hand) -> HandResult {
         match (self.status(), dealer.status()) {
             (HandStatus::Blackjack, HandStatus::Blackjack) => HandResult::Push,
@@ -336,17 +357,24 @@ impl Display for Hand {
     }
 }
 
+/// A shoe is a container for cards that can be drawn from
+/// It can be shuffled and will reshuffle itself when empty
 trait Shoe {
+    /// Draws a card from the shoe
     fn draw(&mut self) -> Card;
+    /// Shuffles the shoe if it needs shuffling
     fn shuffle_if_needed(&mut self);
+    /// Shuffles the shoe
     fn shuffle(&mut self) {}
 
+    /// Draws a card for the player and announces it
     fn draw_player(&mut self) -> PlayerCard {
         thread::sleep(Duration::from_secs(1));
         let card = self.draw();
         println!("You draw {card}.");
         PlayerCard(card)
     }
+    /// Draws a card for the dealer and announces it if not hidden
     fn draw_dealer(&mut self, hidden: bool) -> DealerCard {
         thread::sleep(Duration::from_secs(1));
         let card = self.draw();
@@ -359,6 +387,9 @@ trait Shoe {
     }
 }
 
+/// A multi-deck shoe is a shoe that contains multiple decks of cards
+/// As it is drawn from, the cards are removed from the shoe
+/// Shuffling replaces all the cards in the shoe
 struct MultiDeck {
     size: u8,
     dist: WeightedIndex<u16>,
@@ -367,6 +398,7 @@ struct MultiDeck {
 }
 
 impl MultiDeck {
+    /// Create a new multi-deck shoe with the given number of decks and shuffle strategy
     fn new(size: u8, shuffle_strategy: ShuffleStrategy) -> Self {
         let remaining = [size as u16; 52];
         let dist = WeightedIndex::new(remaining).unwrap();
@@ -376,10 +408,12 @@ impl MultiDeck {
 
 impl Shoe for MultiDeck {
     fn draw(&mut self) -> Card {
-        let ordinal = self.dist.sample(&mut thread_rng());
-        self.remaining[ordinal] -= 1;
+        let ordinal = thread_rng().sample(&self.dist);
+        self.remaining[ordinal] -= 1; // Remove the card from the shoe
         let new_weight = self.remaining[ordinal];
+        // Update the distribution to reflect the new weight of the removed card
         if self.dist.update_weights(&[(ordinal, &new_weight)]).is_err() {
+            // The shoe is empty and it is not possible to have empty weights, so shuffle
             println!("The shoe is empty. Shuffling...");
             self.shuffle();
         }
@@ -416,12 +450,15 @@ impl Shoe for MultiDeck {
     }
 }
 
+/// An infinite deck never runs out of cards and is always uniformly distributed
 struct InfiniteDeck;
 
 impl Shoe for InfiniteDeck {
+    /// Draws a random card from the infinite deck
     fn draw(&mut self) -> Card {
         random()
     }
+    /// An infinite deck never needs shuffling
     fn shuffle_if_needed(&mut self) {
         // Do nothing
     }
@@ -540,6 +577,9 @@ pub fn play(config: Blackjack) {
     thread::sleep(Duration::from_secs(1));
 }
 
+/// Prompts the player to place a bet or quit
+/// Returns Some(bet) if the player wants to bet bet chips
+/// Returns None if the player wants to quit
 fn place_bet(chips: u32, max_bet: Option<u32>, min_bet: Option<u32>) -> Option<u32> {
     if chips == 0 {
         println!("You are out of chips!");
@@ -572,6 +612,7 @@ fn place_bet(chips: u32, max_bet: Option<u32>, min_bet: Option<u32>) -> Option<u
     }
 }
 
+/// The actions the player can take on their turn
 enum Action {
     Stand,
     Hit,
@@ -608,6 +649,7 @@ impl FromStr for Action {
     }
 }
 
+/// Prompts the player to choose an action
 fn player_action(hand: &Hand, can_double_bet: bool) -> Action {
     print!("{}\t\t{}", Action::Hit, Action::Stand);
     if can_double_bet && hand.is_two_cards() {
