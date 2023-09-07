@@ -10,7 +10,7 @@ use rand::distributions::WeightedIndex;
 use rand::Rng;
 use crate::{Blackjack, BlackjackPayout, ShuffleStrategy, Soft17};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum Suit {
     Clubs,
     Diamonds,
@@ -24,21 +24,13 @@ impl Suit {
         let ordinal = thread_rng().gen_range(0..=3);
         Suit::from_ordinal(ordinal)
     }
-    fn ordinal(&self) -> usize {
-        match self {
-            Suit::Clubs => 0,
-            Suit::Diamonds => 1,
-            Suit::Hearts => 2,
-            Suit::Spades => 3,
-        }
-    }
     fn from_ordinal(ordinal: usize) -> Self {
         match ordinal {
             0 => Suit::Clubs,
             1 => Suit::Diamonds,
             2 => Suit::Hearts,
             3 => Suit::Spades,
-            _ => unreachable!(),
+            _ => panic!("Invalid ordinal"),
         }
     }
 }
@@ -65,23 +57,6 @@ impl Rank {
     fn random() -> Self {
         let ordinal = thread_rng().gen_range(0..=12);
         Rank::from_ordinal(ordinal)
-    }
-    fn ordinal(&self) -> usize {
-        match self {
-            Rank::Two => 0,
-            Rank::Three => 1,
-            Rank::Four => 2,
-            Rank::Five => 3,
-            Rank::Six => 4,
-            Rank::Seven => 5,
-            Rank::Eight => 6,
-            Rank::Nine => 7,
-            Rank::Ten => 8,
-            Rank::Jack => 9,
-            Rank::Queen => 10,
-            Rank::King => 11,
-            Rank::Ace => 12,
-        }
     }
     fn from_ordinal(ordinal: usize) -> Self {
         match ordinal {
@@ -172,7 +147,7 @@ impl Card {
         Card::from_ordinal(ordinal)
     }
     fn ordinal(&self) -> usize {
-        self.rank.ordinal() * 4 + self.suit.ordinal()
+        self.rank as usize * 4 + self.suit as usize // Use casting to convert enum to ordinal
     }
     fn from_ordinal(ordinal: usize) -> Self {
         let rank = Rank::from_ordinal(ordinal / 4);
@@ -387,14 +362,14 @@ trait Shoe {
 
 struct MultiDeck {
     size: u8,
-    dist: WeightedIndex<u8>,
-    remaining: [u8; 52],
+    dist: WeightedIndex<u16>,
+    remaining: [u16; 52], // Amount of each card remaining, indexed by ordinal
     shuffle_strategy: ShuffleStrategy,
 }
 
 impl MultiDeck {
     fn new(size: u8, shuffle_strategy: ShuffleStrategy) -> Self {
-        let remaining = [size; 52];
+        let remaining = [size as u16; 52];
         let dist = WeightedIndex::new(remaining).unwrap();
         MultiDeck { size, dist, remaining, shuffle_strategy }
     }
@@ -431,13 +406,13 @@ impl Shoe for MultiDeck {
                 self.shuffle();
             },
         }
-        fn count(remaining: &[u8; 52]) -> u16 {
-            remaining.iter().map(|&x| x as u16).sum()
+        fn count(remaining: &[u16; 52]) -> u16 {
+            remaining.iter().sum()
         }
     }
     fn shuffle(&mut self) {
         thread::sleep(Duration::from_secs(2));
-        self.remaining = [self.size; 52];
+        self.remaining = [self.size as u16; 52];
         self.dist = WeightedIndex::new(self.remaining).unwrap();
     }
 }
@@ -473,7 +448,8 @@ pub fn play(config: Blackjack) {
         let dealer_showing = dealer_hand.cards[0].rank.value();
         // In reality, the dealer would check for blackjack here
         if dealer_showing == 10 || dealer_showing == 11 {
-            println!("The dealer checks their cards...");
+            thread::sleep(Duration::from_secs(1));
+            println!("The dealer checks their hidden card...");
         }
 
         // The player may now play their hand(s) (skip if dealer has blackjack)
@@ -634,12 +610,12 @@ impl FromStr for Action {
 }
 
 fn player_action(hand: &Hand, can_double_bet: bool) -> Action {
-    print!("{}\t\t{}\t\t", Action::Hit, Action::Stand);
+    print!("{}\t\t{}", Action::Hit, Action::Stand);
     if can_double_bet && hand.is_two_cards() {
-        print!("{}\t\t", Action::DoubleDown);
+        print!("\t{}", Action::DoubleDown);
     }
     if can_double_bet && hand.is_pair() {
-        print!("{}\t\t", Action::Split);
+        print!("\t\t{}", Action::Split);
     }
     println!();
     let mut action = String::new();
