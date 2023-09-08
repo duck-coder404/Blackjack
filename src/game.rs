@@ -187,7 +187,6 @@ impl Add<DealerCard> for DealerCard {
     type Output = Hand;
 
     fn add(self, rhs: DealerCard) -> Self::Output {
-        // It takes the dealer a second to add the cards together
         thread::sleep(Duration::from_secs(1));
         let DealerCard(lhs) = self;
         let DealerCard(rhs) = rhs;
@@ -444,7 +443,7 @@ impl Shoe for MultiDeck {
         }
     }
     fn shuffle(&mut self) {
-        thread::sleep(Duration::from_secs(2));
+        thread::sleep(Duration::from_secs(1));
         self.remaining = [self.size as u16; 52];
         self.dist = WeightedIndex::new(self.remaining).unwrap();
     }
@@ -466,10 +465,7 @@ impl Shoe for InfiniteDeck {
 
 pub fn play(config: Blackjack) {
     println!("Welcome to Blackjack!");
-    let mut deck: Box<dyn Shoe> = match config.decks {
-        Some(decks) => Box::new(MultiDeck::new(decks, config.shuffle)),
-        None => Box::new(InfiniteDeck),
-    };
+    let mut deck: Box<dyn Shoe> = config.decks.into();
     let mut player_chips = config.chips;
     while let Some(mut bet) = place_bet(player_chips, config.max_bet, config.min_bet) {
         player_chips -= bet;
@@ -484,8 +480,8 @@ pub fn play(config: Blackjack) {
         let dealer_showing = dealer_hand.cards[0].rank.value();
         // In reality, the dealer would check for blackjack here
         if dealer_showing == 10 || dealer_showing == 11 {
+            println!("The dealer checks their hand for Blackjack...");
             thread::sleep(Duration::from_secs(1));
-            println!("The dealer checks their hidden card...");
         }
 
         // The player may now play their hand(s) (skip if dealer has blackjack)
@@ -577,6 +573,16 @@ pub fn play(config: Blackjack) {
     thread::sleep(Duration::from_secs(1));
 }
 
+impl From<Option<u8>> for Box<dyn Shoe> {
+    fn from(value: Option<u8>) -> Self {
+        match value {
+            Some(decks) =>
+                Box::new(MultiDeck::new(decks, ShuffleStrategy::Continuous)),
+            None => Box::new(InfiniteDeck),
+        }
+    }
+}
+
 /// Prompts the player to place a bet or quit
 /// Returns Some(bet) if the player wants to bet bet chips
 /// Returns None if the player wants to quit
@@ -601,8 +607,10 @@ fn place_bet(chips: u32, max_bet: Option<u32>, min_bet: Option<u32>) -> Option<u
             Ok(bet) if bet > chips => println!("You don't have enough chips!"),
             Ok(bet) => {
                 match (max_bet, min_bet) {
-                    (Some(max), _) if bet > max => println!("You cannot bet more than {} chips!", max),
-                    (_, Some(min)) if bet < min => println!("You cannot bet less than {} chips!", min),
+                    (Some(max), _) if bet > max =>
+                        println!("You cannot bet more than {} chips!", max),
+                    (_, Some(min)) if bet < min =>
+                        println!("You cannot bet less than {} chips!", min),
                     _ => break Some(bet),
                 }
             },
@@ -650,45 +658,34 @@ impl FromStr for Action {
 }
 
 /// Prompts the player to choose an action
+/// Which actions are available depends on the hand and the player's chips
 fn player_action(hand: &Hand, can_double_bet: bool) -> Action {
-    print!("{}\t\t{}", Action::Hit, Action::Stand);
+    let mut action = format!("{}\t\t{}", Action::Hit, Action::Stand);
     if can_double_bet && hand.is_two_cards() {
-        print!("\t{}", Action::DoubleDown);
+        action.push_str(&format!("\t{}", Action::DoubleDown));
     }
     if can_double_bet && hand.is_pair() {
-        print!("\t\t{}", Action::Split);
+        action.push_str(&format!("\t\t{}", Action::Split));
     }
-    println!();
-    let mut action = String::new();
+    println!("{}", action);
+    action.clear(); // Reuse the string
     loop {
         io::stdin()
             .read_line(&mut action)
             .expect("Failed to read input");
         match action.trim().parse() {
             Ok(action) => match action {
-                Action::DoubleDown => {
-                    if !hand.is_two_cards() {
-                        println!("You can only double down on your first two cards!");
-                    } else if !can_double_bet {
-                        println!("You don't have enough chips to double down!");
-                    } else {
-                        break action;
-                    }
-                }
-                Action::Split => {
-                    if !hand.is_pair() {
-                        println!("You can only split a pair!");
-                    } else if !can_double_bet {
-                        println!("You don't have enough chips to split!");
-                    } else {
-                        break action;
-                    }
-                }
-                action => break action,
+                Action::DoubleDown if !hand.is_two_cards() =>
+                    println!("You can only double down on your first two cards!"),
+                Action::DoubleDown if !can_double_bet =>
+                    println!("You don't have enough chips to double down!"),
+                Action::Split if !hand.is_pair() =>
+                    println!("You can only split a pair!"),
+                Action::Split if !can_double_bet =>
+                    println!("You don't have enough chips to split!"),
+                action => return action,
             },
-            Err(_) => {
-                println!("Please enter a valid action!");
-            }
+            Err(_) => println!("Please enter a valid action!")
         };
         action.clear();
     }
