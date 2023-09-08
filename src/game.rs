@@ -467,7 +467,7 @@ pub fn play(config: Blackjack) {
     println!("Welcome to Blackjack!");
     let mut deck: Box<dyn Shoe> = config.decks.into();
     let mut player_chips = config.chips;
-    while let Some(mut bet) = place_bet(player_chips, config.max_bet, config.min_bet) {
+    while let Some(bet) = place_bet(player_chips, config.max_bet, config.min_bet) {
         player_chips -= bet;
         println!("You bet {bet} chips. You have {player_chips} chips remaining.");
 
@@ -485,15 +485,15 @@ pub fn play(config: Blackjack) {
         }
 
         // The player may now play their hand(s) (skip if dealer has blackjack)
-        let mut hands = vec![player_hand];
+        let mut hand_bets = vec![(player_hand, bet)];
         if !dealer_hand.is_21() {
-            while let Some(hand) = hands.iter_mut().find(|hand| !hand.done) {
+            while let Some((hand, bet)) = hand_bets.iter_mut().find(|(hand, _)| !hand.done) {
                 println!(
                     "What would you like to do? ({} against {})",
                     hand,
                     dealer_hand.cards[0].rank.value()
                 );
-                match player_action(hand, bet <= player_chips) {
+                match player_action(hand, player_chips >= *bet) {
                     Action::Stand => {
                         println!("You stand!");
                         hand.done = true;
@@ -504,18 +504,18 @@ pub fn play(config: Blackjack) {
                     }
                     Action::DoubleDown => {
                         println!("You double and put another {bet} chips down!");
-                        player_chips -= bet;
-                        // FIXME: If this is a split hand the doubled bet will apply to both the player's hands
-                        bet *= 2; // Double the bet for this hand
+                        player_chips -= *bet; // The player pays another equal bet
+                        *bet *= 2; // This bet for this hand is now doubled
                         *hand += deck.draw_player();
                         hand.done = true;
                     }
                     Action::Split => {
                         println!("You split your hand into two and put another {bet} chips down!");
-                        player_chips -= bet; // Do not double the bet, each hand is worth the original bet
-                        let right = hand.split_and_replace(deck.draw_player());
-                        let right_hand = right + deck.draw_player();
-                        hands.push(right_hand);
+                        player_chips -= *bet; // The player pays another equal bet for the new hand
+                        let split_card = hand.split_and_replace(deck.draw_player());
+                        let right_hand = split_card + deck.draw_player();
+                        let right_hand_bet = (right_hand, *bet);
+                        hand_bets.push(right_hand_bet);
                     }
                 }
             }
@@ -530,7 +530,7 @@ pub fn play(config: Blackjack) {
             println!("The dealer has {}.", dealer_hand.total);
         }
 
-        if hands.iter().any(|hand| !hand.is_bust()) {
+        if hand_bets.iter().any(|(hand, _)| !hand.is_bust()) {
             // At least one hand is not bust, so the dealer must play
             while !dealer_hand.done { // Keep drawing cards until the dealer is done
                 dealer_hand += deck.draw_dealer(false);
@@ -545,10 +545,10 @@ pub fn play(config: Blackjack) {
 
         // At this point, all hands are done
         // For each hand, determine the result and payout
-        let chips_won: u32 = hands
+        let chips_won: u32 = hand_bets
             .into_iter()
-            .map(|hand| hand.against(&dealer_hand))
-            .map(|result| match result {
+            .map(|(hand, bet)| (hand.against(&dealer_hand), bet))
+            .map(|(result, bet)| match result {
                 HandResult::Blackjack => match config.payout {
                     BlackjackPayout::ThreeToTwo => bet + bet * 3 / 2,
                     BlackjackPayout::SixToFive => bet + bet * 6 / 5,
