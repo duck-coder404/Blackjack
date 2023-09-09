@@ -2,6 +2,7 @@ use clap::{Parser, ValueEnum};
 
 mod game;
 mod card;
+mod io;
 
 #[derive(Debug, Parser)]
 #[command(author, about, version)]
@@ -68,5 +69,6 @@ pub enum BlackjackPayout {
 fn main() {
     let config = Configuration::parse();
     println!("Starting {:#?}\n", config);
+    println!("🂡");
     game::play(config);
 }

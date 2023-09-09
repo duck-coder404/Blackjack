@@ -1,11 +1,10 @@
-use std::fmt::{self, Display, Formatter};
-use std::str::FromStr;
 use std::time::Duration;
-use std::{io, thread};
+use std::thread;
 
 use crate::Configuration;
 use crate::card::hand::{DealerHand, Hand, PlayerHand};
 use crate::card::shoe::Shoe;
+use crate::io::{Action, place_bet, make_move};
 
 pub fn play(config: Configuration) {
     println!("Welcome to Blackjack!");
@@ -69,7 +68,7 @@ fn play_hands(hands: &mut Vec<PlayerHand>, dealer_hand: &DealerHand, deck: &mut 
             "What would you like to do? ({} against {})",
             hand, dealer_hand.showing()
         );
-        match player_action(hand, *player_chips >= hand.bet()) {
+        match make_move(hand.len(), hand.is_pair(), *player_chips >= hand.bet()) {
             Action::Stand => {
                 println!("You stand!");
                 hand.stand();
@@ -92,112 +91,6 @@ fn play_hands(hands: &mut Vec<PlayerHand>, dealer_hand: &DealerHand, deck: &mut 
                 hands.push(new_hand);
             }
         }
-    }
-}
-
-/// Prompts the player to place a bet or quit
-/// Returns Some(bet) if the player wants to bet bet chips
-/// Returns None if the player wants to quit
-fn place_bet(chips: u32, max_bet: Option<u32>, min_bet: Option<u32>) -> Option<u32> {
-    if chips == 0 {
-        println!("You are out of chips!");
-        return None;
-    }
-    println!("You have {chips} chips.");
-    println!("How many chips would you like to bet? Type \"stop\" to quit.");
-    let mut bet = String::new();
-    loop {
-        io::stdin()
-            .read_line(&mut bet)
-            .expect("Failed to read input");
-        let trimmed = bet.trim();
-        if trimmed == "stop" {
-            break None;
-        }
-        match trimmed.parse() {
-            Ok(0) => println!("You must bet at least 1 chip!"),
-            Ok(bet) if bet > chips => println!("You don't have enough chips!"),
-            Ok(bet) => match (max_bet, min_bet) {
-                (Some(max), _) if bet > max => println!("You cannot bet more than {} chips!", max),
-                (_, Some(min)) if bet < min => println!("You cannot bet less than {} chips!", min),
-                _ => break Some(bet),
-            },
-            Err(_) => println!("Please enter a number!"),
-        }
-        bet.clear();
-    }
-}
-
-/// The actions the player can take on their turn
-enum Action {
-    Stand,
-    Hit,
-    DoubleDown,
-    Split,
-}
-
-impl Display for Action {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Action::Stand => write!(f, "Stand (s)"),
-            Action::Hit => write!(f, "Hit (h)"),
-            Action::DoubleDown => write!(f, "Double Down (d)"),
-            Action::Split => write!(f, "Split (p)"),
-        }
-    }
-}
-
-impl FromStr for Action {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "s" => Ok(Action::Stand),
-            "stand" => Ok(Action::Stand),
-            "h" => Ok(Action::Hit),
-            "hit" => Ok(Action::Hit),
-            "d" => Ok(Action::DoubleDown),
-            "double" => Ok(Action::DoubleDown),
-            "p" => Ok(Action::Split),
-            "split" => Ok(Action::Split),
-            _ => Err(()),
-        }
-    }
-}
-
-/// Prompts the player to choose an action
-/// Which actions are available depends on the hand and the player's chips
-fn player_action(hand: &PlayerHand, can_double_bet: bool) -> Action {
-    let mut action = format!("{}\t\t{}", Action::Hit, Action::Stand);
-    if can_double_bet && hand.len() == 2 {
-        action.push_str(&format!("\t{}", Action::DoubleDown));
-    }
-    if can_double_bet && hand.is_pair() {
-        action.push_str(&format!("\t\t{}", Action::Split));
-    }
-    println!("{}", action);
-    action.clear(); // Reuse the string
-    loop {
-        io::stdin()
-            .read_line(&mut action)
-            .expect("Failed to read input");
-        match action.trim().parse() {
-            Ok(action) => match action {
-                Action::DoubleDown if hand.len() != 2 => {
-                    println!("You can only double down on your first two cards!")
-                }
-                Action::DoubleDown if !can_double_bet => {
-                    println!("You don't have enough chips to double down!")
-                }
-                Action::Split if !hand.is_pair() => println!("You can only split a pair!"),
-                Action::Split if !can_double_bet => {
-                    println!("You don't have enough chips to split!")
-                }
-                action => return action,
-            },
-            Err(_) => println!("Please enter a valid action!"),
-        };
-        action.clear();
     }
 }
 
