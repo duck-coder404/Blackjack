@@ -4,7 +4,7 @@ mod game;
 
 #[derive(Debug, Parser)]
 #[command(author, about, version)]
-pub struct Blackjack {
+pub struct Configuration {
     /// Number of decks to use. Defaults to infinite.
     #[arg(long, short)]
     pub decks: Option<u8>,
@@ -48,7 +48,7 @@ pub enum ShuffleStrategy {
     EmptyShoe,
 }
 
-#[derive(Debug, Clone, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum Soft17 {
     /// Dealer stands on soft 17.
     Stand,
@@ -65,7 +65,7 @@ pub enum BlackjackPayout {
 }
 
 fn main() {
-    let config = Blackjack::parse();
-    println!("Starting {:#?}", config);
+    let config = Configuration::parse();
+    println!("Starting {:#?}\n", config);
     game::play(config);
 }
