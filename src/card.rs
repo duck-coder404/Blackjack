@@ -398,7 +398,7 @@ pub(crate) mod shoe {
         /// Draws a card from the shoe
         fn draw(&mut self) -> Card;
         /// Shuffles the shoe if it needs shuffling
-        fn shuffle_if_needed(&mut self);
+        fn shuffle_if_needed(&mut self, shuffle_strategy: &ShuffleStrategy);
         /// Shuffles the shoe
         fn shuffle(&mut self) {}
     }
@@ -410,15 +410,14 @@ pub(crate) mod shoe {
         size: u8,
         dist: WeightedIndex<u16>,
         remaining: [u16; 52], // Amount of each card remaining, indexed by ordinal
-        shuffle_strategy: ShuffleStrategy,
     }
 
     impl MultiDeck {
         /// Create a new multi-deck shoe with the given number of decks and shuffle strategy
-        fn new(size: u8, shuffle_strategy: ShuffleStrategy) -> Self {
+        fn with_size(size: u8) -> Self {
             let remaining = [size as u16; 52];
             let dist = WeightedIndex::new(remaining).unwrap();
-            MultiDeck { size, dist, remaining, shuffle_strategy }
+            MultiDeck { size, dist, remaining }
         }
     }
 
@@ -435,8 +434,8 @@ pub(crate) mod shoe {
             }
             Card::from_ordinal(ordinal)
         }
-        fn shuffle_if_needed(&mut self) {
-            match self.shuffle_strategy {
+        fn shuffle_if_needed(&mut self, shuffle_strategy: &ShuffleStrategy) {
+            match shuffle_strategy {
                 ShuffleStrategy::Continuous => self.shuffle(),
                 ShuffleStrategy::QuarterShoe => {
                     if count(&self.remaining) <= self.size as u16 * (52 * 3 / 4) {
@@ -483,7 +482,7 @@ pub(crate) mod shoe {
             random()
         }
         /// An infinite deck never needs shuffling
-        fn shuffle_if_needed(&mut self) {
+        fn shuffle_if_needed(&mut self, _shuffle_strategy: &ShuffleStrategy) {
             // Do nothing
         }
     }
@@ -491,7 +490,7 @@ pub(crate) mod shoe {
     impl From<Option<u8>> for Box<dyn Shoe> {
         fn from(value: Option<u8>) -> Self {
             match value {
-                Some(decks) => Box::new(MultiDeck::new(decks, ShuffleStrategy::Continuous)),
+                Some(decks) => Box::new(MultiDeck::with_size(decks)),
                 None => Box::new(InfiniteDeck),
             }
         }

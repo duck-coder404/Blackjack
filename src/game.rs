@@ -55,7 +55,7 @@ pub fn play(config: Configuration) {
         }
         player_chips += chips_won;
         pause();
-        deck.shuffle_if_needed();
+        deck.shuffle_if_needed(&config.shuffle);
     }
     println!("You finished with {player_chips} chips.");
     println!("Goodbye!");
