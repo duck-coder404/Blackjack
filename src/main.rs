@@ -1,6 +1,7 @@
 use clap::{Parser, ValueEnum};
 
 mod game;
+mod card;
 
 #[derive(Debug, Parser)]
 #[command(author, about, version)]
