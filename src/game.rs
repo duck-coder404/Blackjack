@@ -1,10 +1,10 @@
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
 
-use crate::Configuration;
 use crate::card::hand::{DealerHand, Hand, PlayerHand};
 use crate::card::shoe::Shoe;
-use crate::io::{Action, place_bet, make_move};
+use crate::io::{make_move, offer_early_surrender, place_bet, Action};
+use crate::{Configuration, Surrender};
 
 pub fn play(config: Configuration) {
     println!("Welcome to Blackjack!");
@@ -20,11 +20,28 @@ pub fn play(config: Configuration) {
         player_hand += deck.draw();
         dealer_hand += deck.draw();
 
+        if dealer_hand.showing() >= 10 {
+            if (config.surrender == Surrender::Early || config.surrender == Surrender::Both)
+                && offer_early_surrender()
+            {
+                println!("You surrender!");
+                player_hand.surrender();
+            }
+            pause();
+            println!("The dealer checks their hand for blackjack...");
+        }
+
         // The player may now play their hand, which may turn into multiple hands through splitting
         // (skip if dealer has blackjack)
         let mut player_hands = vec![player_hand];
         if !dealer_hand.is_21() {
-            play_hands(&mut player_hands, &dealer_hand, &mut deck, &mut player_chips);
+            play_hands(
+                &mut player_hands,
+                &dealer_hand,
+                &mut deck,
+                &mut player_chips,
+                &config.surrender,
+            );
         }
 
         // At this point, all player hands are done and the dealer reveals their down card
@@ -61,14 +78,26 @@ pub fn play(config: Configuration) {
     pause();
 }
 
-fn play_hands(hands: &mut Vec<PlayerHand>, dealer_hand: &DealerHand, deck: &mut Box<dyn Shoe>, player_chips: &mut u32) {
+fn play_hands(
+    hands: &mut Vec<PlayerHand>,
+    dealer_hand: &DealerHand,
+    deck: &mut Box<dyn Shoe>,
+    player_chips: &mut u32,
+    surrender: &Surrender,
+) {
     while let Some(hand) = hands.iter_mut().find(|hand| !hand.is_over()) {
         pause();
         println!(
             "What would you like to do? ({} against {})",
-            hand, dealer_hand.showing()
+            hand,
+            dealer_hand.showing()
         );
-        match make_move(hand.len(), hand.is_pair(), *player_chips >= hand.bet()) {
+        match make_move(
+            hand.len(),
+            hand.is_pair(),
+            *player_chips >= hand.bet(),
+            surrender,
+        ) {
             Action::Stand => {
                 println!("You stand!");
                 hand.stand();
@@ -89,6 +118,10 @@ fn play_hands(hands: &mut Vec<PlayerHand>, dealer_hand: &DealerHand, deck: &mut 
                 *hand += deck.draw();
                 new_hand += deck.draw();
                 hands.push(new_hand);
+            }
+            Action::Surrender => {
+                println!("You surrender!");
+                hand.surrender();
             }
         }
     }

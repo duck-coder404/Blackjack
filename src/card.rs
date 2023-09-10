@@ -205,14 +205,32 @@ pub(crate) mod hand {
         cards: Vec<Card>,
         value: Value, // (soft, total)
         stood: bool,   // Whether the player has stood on this hand
+        surrendered: bool,
         bet: u32,
     }
 
     impl PlayerHand {
         pub(crate) fn new(card: Card, bet: u32) -> Self {
-            let mut hand = PlayerHand { cards: Vec::new(), value: Value::zero(), stood: false, bet };
-            hand += card; // Use AddAssign to update the value and announce the card
+            let mut hand = PlayerHand {
+                cards: Vec::new(),
+                value: Value::zero(),
+                stood: false,
+                surrendered: false,
+                bet
+            };
+            hand += card; // Use AddAssign to update the hand and announce the card
             hand
+        }
+        pub(crate) fn bet(&self) -> u32 {
+            self.bet
+        }
+        pub(crate) fn stand(&mut self) {
+            self.stood = true;
+        }
+        pub(crate) fn double(&mut self, card: Card) {
+            self.bet += self.bet;
+            *self += card;
+            self.stood = self.value.total <= 21; // Stand if we didn't bust
         }
         /// Splits the hand
         /// The card taken from this hand is returned, so it can be used to create a new hand
@@ -222,20 +240,15 @@ pub(crate) mod hand {
             hand.value = hand.cards[0].value();
             PlayerHand::new(split_card, hand.bet)
         }
-        pub(crate) fn bet(&self) -> u32 {
-            self.bet
-        }
-        pub(crate) fn double(&mut self, card: Card) {
-            self.bet += self.bet;
-            *self += card;
-            self.stood = self.value.total <= 21; // Stand if we didn't bust
-        }
-        pub(crate) fn stand(&mut self) {
-            self.stood = true;
+        pub(crate) fn surrender(&mut self) {
+            self.surrendered = true;
         }
         /// Compares the status of this hand to the status of the dealer's hand
         /// and computes the winnings
         pub(crate) fn winnings(&self, dealer_status: &HandStatus, payout: &BlackjackPayout) -> u32 {
+            if self.surrendered {
+                return self.bet / 2; // Half the bet is returned
+            }
             let result = match (self.status(), dealer_status) {
                 (HandStatus::Blackjack, HandStatus::Blackjack) => HandResult::Push,
                 (HandStatus::Blackjack, _) => HandResult::Blackjack,
@@ -309,18 +322,15 @@ pub(crate) mod hand {
     impl AddAssign<Card> for DealerHand {
         fn add_assign(&mut self, rhs: Card) {
             thread::sleep(Duration::from_secs(1));
-            let showing = self.value.total;
             self.value += rhs.value();
             let total = self.value.total;
-            if self.cards.len() != 1 { // Announce the card unless we are drawing the hidden card
+            if self.cards.len() != 1 { // Announce the card unless it is the second (down) card
                 print!("The dealer draws {}. ", rhs);
                 if total > 21 {
                     println!("Dealer bust!");
                 } else {
                     println!("The dealer has {}.", total);
                 }
-            } else if showing == 10 || showing == 11 {
-                println!("The dealer draws a card and checks for blackjack...");
             } else {
                 println!("The dealer draws a card.");
             }
@@ -336,7 +346,7 @@ pub(crate) mod hand {
             &self.cards
         }
         fn is_stood(&self) -> bool {
-            self.stood
+            self.stood || self.surrendered
         }
     }
 
