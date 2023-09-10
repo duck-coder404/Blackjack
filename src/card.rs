@@ -394,7 +394,7 @@ pub(crate) mod hand {
     }
 }
 
-pub(crate) mod shoe {
+pub(crate) mod dispenser {
     use std::thread;
     use std::time::Duration;
     use rand::distributions::WeightedIndex;
@@ -402,37 +402,48 @@ pub(crate) mod shoe {
     use crate::card::Card;
     use crate::ShuffleStrategy;
 
-    /// A shoe is a container for cards that can be drawn from
-    /// It can be shuffled and will reshuffle itself when empty
-    pub(crate) trait Shoe {
-        /// Draws a card from the shoe
-        fn draw(&mut self) -> Card;
-        /// Shuffles the shoe if it needs shuffling
+    /// A generic dispenser of cards
+    pub(crate) struct CardDispenser {
+        source: Box<dyn CardSource>,
+    }
+
+    impl CardDispenser {
+        /// Draws a card from the dispenser
+        pub(crate) fn draw_card(&mut self) -> Card {
+            self.source.draw_card()
+        }
+        /// Shuffles the dispenser if the shuffle strategy requires it
+        pub(crate) fn shuffle_if_needed(&mut self, shuffle_strategy: &ShuffleStrategy) {
+            self.source.shuffle_if_needed(shuffle_strategy);
+        }
+    }
+
+    /// A source of cards
+    trait CardSource {
+        fn draw_card(&mut self) -> Card;
         fn shuffle_if_needed(&mut self, shuffle_strategy: &ShuffleStrategy);
-        /// Shuffles the shoe
         fn shuffle(&mut self) {}
     }
 
-    /// A multi-deck shoe is a shoe that contains multiple decks of cards
-    /// As it is drawn from, the cards are removed from the shoe
-    /// Shuffling replaces all the cards in the shoe
-    struct MultiDeck {
+    /// A shoe is a container that contains multiple decks of cards.
+    /// Shuffling replaces all the cards in the shoe.
+    struct Shoe {
         size: u8,
         dist: WeightedIndex<u16>,
         remaining: [u16; 52], // Amount of each card remaining, indexed by ordinal
     }
 
-    impl MultiDeck {
-        /// Create a new multi-deck shoe with the given number of decks and shuffle strategy
-        fn with_size(size: u8) -> Self {
+    impl Shoe {
+        /// Create a new shoe with the given number of decks
+        fn with_decks(size: u8) -> Self {
             let remaining = [size as u16; 52];
             let dist = WeightedIndex::new(remaining).unwrap();
-            MultiDeck { size, dist, remaining }
+            Shoe { size, dist, remaining }
         }
     }
 
-    impl Shoe for MultiDeck {
-        fn draw(&mut self) -> Card {
+    impl CardSource for Shoe {
+        fn draw_card(&mut self) -> Card {
             let ordinal = thread_rng().sample(&self.dist);
             self.remaining[ordinal] -= 1; // Remove the card from the shoe
             let new_weight = self.remaining[ordinal];
@@ -447,25 +458,25 @@ pub(crate) mod shoe {
         fn shuffle_if_needed(&mut self, shuffle_strategy: &ShuffleStrategy) {
             match shuffle_strategy {
                 ShuffleStrategy::Continuous => self.shuffle(),
-                ShuffleStrategy::QuarterShoe => {
+                ShuffleStrategy::Quarter => {
                     if count(&self.remaining) <= self.size as u16 * (52 * 3 / 4) {
                         println!("The shoe is a quarter empty. Shuffling...");
                         self.shuffle();
                     }
                 }
-                ShuffleStrategy::HalfShoe => {
+                ShuffleStrategy::Half => {
                     if count(&self.remaining) <= self.size as u16 * (52 / 2) {
                         println!("The shoe is half empty. Shuffling...");
                         self.shuffle();
                     }
                 }
-                ShuffleStrategy::ThreeQuartersShoe => {
+                ShuffleStrategy::ThreeQuarters => {
                     if count(&self.remaining) <= self.size as u16 * (52 / 4) {
                         println!("The shoe is three quarters empty. Shuffling...");
                         self.shuffle();
                     }
                 }
-                ShuffleStrategy::EmptyShoe => {
+                ShuffleStrategy::Empty => {
                     if count(&self.remaining) <= 1 {
                         println!("The shoe is empty. Shuffling...");
                         self.shuffle();
@@ -486,9 +497,9 @@ pub(crate) mod shoe {
     /// An infinite deck never runs out of cards and is always uniformly distributed
     struct InfiniteDeck;
 
-    impl Shoe for InfiniteDeck {
+    impl CardSource for InfiniteDeck {
         /// Draws a random card from the infinite deck
-        fn draw(&mut self) -> Card {
+        fn draw_card(&mut self) -> Card {
             random()
         }
         /// An infinite deck never needs shuffling
@@ -497,12 +508,13 @@ pub(crate) mod shoe {
         }
     }
 
-    impl From<Option<u8>> for Box<dyn Shoe> {
+    impl From<Option<u8>> for CardDispenser {
         fn from(value: Option<u8>) -> Self {
-            match value {
-                Some(decks) => Box::new(MultiDeck::with_size(decks)),
+            let dispenser: Box<dyn CardSource> = match value {
+                Some(decks) => Box::new(Shoe::with_decks(decks)),
                 None => Box::new(InfiniteDeck),
-            }
+            };
+            CardDispenser { source: dispenser }
         }
     }
 }

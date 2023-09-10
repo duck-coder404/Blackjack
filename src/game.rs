@@ -2,23 +2,23 @@ use std::thread;
 use std::time::Duration;
 
 use crate::card::hand::{DealerHand, Hand, PlayerHand};
-use crate::card::shoe::Shoe;
+use crate::card::dispenser::CardDispenser;
 use crate::io::{make_move, offer_early_surrender, place_bet, Action};
 use crate::{Configuration, Surrender};
 
 pub fn play(config: Configuration) {
     println!("Welcome to Blackjack!");
-    let mut deck: Box<dyn Shoe> = config.decks.into();
+    let mut dispenser: CardDispenser = config.decks.into();
     let mut player_chips = config.chips;
     while let Some(bet) = place_bet(player_chips, config.max_bet, config.min_bet) {
         player_chips -= bet;
         println!("You bet {bet} chips. You have {player_chips} chips remaining.");
 
-        let mut player_hand = PlayerHand::new(deck.draw(), bet);
-        let mut dealer_hand = DealerHand::new(deck.draw(), config.soft17);
+        let mut player_hand = PlayerHand::new(dispenser.draw_card(), bet);
+        let mut dealer_hand = DealerHand::new(dispenser.draw_card(), config.soft17);
 
-        player_hand += deck.draw();
-        dealer_hand += deck.draw();
+        player_hand += dispenser.draw_card();
+        dealer_hand += dispenser.draw_card();
 
         if dealer_hand.showing() >= 10 {
             if (config.surrender == Surrender::Early || config.surrender == Surrender::Both)
@@ -38,7 +38,7 @@ pub fn play(config: Configuration) {
             play_hands(
                 &mut player_hands,
                 &dealer_hand,
-                &mut deck,
+                &mut dispenser,
                 &mut player_chips,
                 &config.surrender,
             );
@@ -50,7 +50,7 @@ pub fn play(config: Configuration) {
         if player_hands.iter().any(|hand| hand.is_stood()) {
             // At least one hand was played and stood on, so the dealer must finish their hand
             while !dealer_hand.is_over() {
-                dealer_hand += deck.draw();
+                dealer_hand += dispenser.draw_card();
             }
         }
 
@@ -71,7 +71,7 @@ pub fn play(config: Configuration) {
         }
         player_chips += chips_won;
         pause();
-        deck.shuffle_if_needed(&config.shuffle);
+        dispenser.shuffle_if_needed(&config.shuffle);
     }
     println!("You finished with {player_chips} chips.");
     println!("Goodbye!");
@@ -81,7 +81,7 @@ pub fn play(config: Configuration) {
 fn play_hands(
     hands: &mut Vec<PlayerHand>,
     dealer_hand: &DealerHand,
-    deck: &mut Box<dyn Shoe>,
+    dispenser: &mut CardDispenser,
     player_chips: &mut u32,
     surrender: &Surrender,
 ) {
@@ -104,19 +104,19 @@ fn play_hands(
             }
             Action::Hit => {
                 println!("You hit!");
-                *hand += deck.draw();
+                *hand += dispenser.draw_card();
             }
             Action::DoubleDown => {
                 println!("You double and put another {} chips down!", hand.bet());
                 *player_chips -= hand.bet(); // The player pays another equal bet
-                hand.double(deck.draw());
+                hand.double(dispenser.draw_card());
             }
             Action::Split => {
                 println!("You split your hand and put another {} chips down!", hand.bet());
                 *player_chips -= hand.bet(); // The player pays another equal bet for the new hand
                 let mut new_hand = PlayerHand::split(hand);
-                *hand += deck.draw();
-                new_hand += deck.draw();
+                *hand += dispenser.draw_card();
+                new_hand += dispenser.draw_card();
                 hands.push(new_hand);
             }
             Action::Surrender => {
