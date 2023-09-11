@@ -290,7 +290,7 @@ pub(crate) mod hand {
         pub(crate) fn showing(&self) -> u8 {
             self.cards[0].rank.worth()
         }
-        pub(crate) fn reveal_down_card(&self) {
+        pub(crate) fn reveal_hole_card(&self) {
             thread::sleep(Duration::from_secs(1));
             print!("The dealer reveals {}. ", self.cards[1]);
             if self.is_21() {

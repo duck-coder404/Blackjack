@@ -45,7 +45,7 @@ pub fn play(config: Configuration) {
         }
 
         // At this point, all player hands are done and the dealer reveals their down card
-        dealer_hand.reveal_down_card();
+        dealer_hand.reveal_hole_card();
 
         if player_hands.iter().any(|hand| hand.is_stood()) {
             // At least one hand was played and stood on, so the dealer must finish their hand
