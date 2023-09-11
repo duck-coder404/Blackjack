@@ -59,7 +59,7 @@ pub fn play(config: Configuration) {
         let dealer_status = dealer_hand.status();
         let chips_won: u32 = player_hands
             .into_iter()
-            .map(|hand| hand.winnings(&dealer_status, &config.payout))
+            .map(|hand| hand.winnings(&dealer_status, &config.blackjack_payout))
             .sum();
 
         pause();
@@ -71,7 +71,7 @@ pub fn play(config: Configuration) {
         }
         player_chips += chips_won;
         pause();
-        dispenser.shuffle_if_needed(&config.shuffle);
+        dispenser.shuffle_if_needed(config.penetration);
     }
     println!("You finished with {player_chips} chips.");
     println!("Goodbye!");

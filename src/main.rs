@@ -7,59 +7,49 @@ mod io;
 #[derive(Debug, Parser)]
 #[command(author, about, version)]
 pub struct Configuration {
-    /// Number of decks to use. Defaults to infinite.
-    #[arg(long, short)]
-    pub decks: Option<u8>,
-    /// When to shuffle the deck. This has no effect if `decks` is not set.
-    #[arg(long, short, value_enum, default_value_t = ShuffleStrategy::Continuous)]
-    pub shuffle: ShuffleStrategy,
+    /// Number of decks to use.
+    #[arg(long, short, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=255))]
+    pub decks: u8,
+    /// Proportion of cards to play before shuffling.
+    /// 0 => every hand, 0.5 => half shoe, 1 => entire shoe.
+    #[arg(long, short, default_value_t = 0.0, value_parser = parse_float_between_0_and_1)]
+    pub penetration: f32,
     /// Dealer strategy on soft 17s.
     #[arg(long, value_enum, default_value_t = Soft17::Stand)]
     pub soft17: Soft17,
-    /// Blackjack payout. Defaults to `ThreeToTwo`.
+    /// Whether blackjack pays 3:2 or 6:5.
     #[arg(long, short, value_enum, default_value_t = BlackjackPayout::ThreeToTwo)]
-    pub payout: BlackjackPayout,
+    pub blackjack_payout: BlackjackPayout,
     /// Number of chips to start with. Defaults to 1000.
     #[arg(short, long, default_value_t = 1000)]
     pub chips: u32,
-    /// Max bet allowed. Defaults to None.
+    /// Max bet allowed.
     #[arg(long)]
     pub max_bet: Option<u32>,
-    /// Min bet allowed. Defaults to None.
+    /// Min bet allowed.
     #[arg(long)]
     pub min_bet: Option<u32>,
-    /// Whether to allow surrendering. Defaults to false.
+    /// Whether to allow surrendering.
     #[arg(long, value_enum, default_value_t = Surrender::None)]
     pub surrender: Surrender,
-    /// Whether to offer insurance. Defaults to false.
+    /// Whether to offer insurance.
     #[arg(long, short, default_value_t = false)]
     pub insurance: bool, // TODO: Implement
 }
 
-/// Casinos have different regulations on when to shuffle.
-#[derive(Debug, Clone, PartialEq, ValueEnum)]
-pub enum ShuffleStrategy {
-    /// Shuffle the shoe after every round, so all cards are always in play.
-    /// This is most common, and made possible by CSMs (continuous shuffling machines).
-    /// It also makes counting cards impossible.
-    Continuous,
-    /// Shuffle when the shoe is a quarter empty.
-    QuarterShoe,
-    /// Shuffle when the shoe is half empty.
-    HalfShoe,
-    /// Shuffle when the shoe is three quarters empty.
-    ThreeQuartersShoe,
-    /// Shuffle when the shoe is empty.
-    /// No casinos would do this, but it is possible.
-    /// Best for counting cards.
-    EmptyShoe,
+fn parse_float_between_0_and_1(s: &str) -> Result<f32, String> {
+    let f = s.parse::<f32>().map_err(|_| format!("{} is not a valid float", s))?;
+    if (0.0..=1.0).contains(&f) {
+        Ok(f)
+    } else {
+        Err(format!("{} is not between 0 and 1", f))
+    }
 }
 
 /// Casinos have different regulations on how the dealer should play on soft 17s.
 #[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum Soft17 {
     /// Dealer stands on soft 17.
-    /// This is more common in casinos and offers the player a slight advantage.
     Stand,
     /// Dealer hits on soft 17.
     Hit,
@@ -69,7 +59,6 @@ pub enum Soft17 {
 #[derive(Debug, Clone, ValueEnum)]
 pub enum BlackjackPayout {
     /// Blackjack pays 3:2.
-    /// This is more common in casinos and offers the player a moderate advantage.
     ThreeToTwo,
     /// Blackjack pays 6:5.
     SixToFive,
@@ -82,10 +71,8 @@ pub enum Surrender {
     /// No surrendering allowed.
     None,
     /// Surrendering allowed before the dealer checks their hole card for blackjack.
-    /// Offers protection against dealer blackjack.
     Early,
     /// Surrendering allowed when the player is choosing their move.
-    /// This is the most common form of surrendering.
     Late,
     /// Both early and late surrendering allowed.
     Both,
@@ -93,6 +80,6 @@ pub enum Surrender {
 
 fn main() {
     let config = Configuration::parse();
-    println!("Starting {:#?}\n", config);
+    println!("Using {:#?}\n", config);
     game::play(config);
 }

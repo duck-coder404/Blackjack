@@ -398,13 +398,12 @@ pub(crate) mod dispenser {
     use std::thread;
     use std::time::Duration;
     use rand::distributions::WeightedIndex;
-    use rand::{random, Rng, thread_rng};
+    use rand::{Rng, thread_rng};
     use crate::card::Card;
-    use crate::ShuffleStrategy;
 
     /// A generic dispenser of cards
     pub(crate) struct CardDispenser {
-        source: Box<dyn CardSource>,
+        source: Shoe,
     }
 
     impl CardDispenser {
@@ -412,16 +411,16 @@ pub(crate) mod dispenser {
         pub(crate) fn draw_card(&mut self) -> Card {
             self.source.draw_card()
         }
-        /// Shuffles the dispenser if the shuffle strategy requires it
-        pub(crate) fn shuffle_if_needed(&mut self, shuffle_strategy: &ShuffleStrategy) {
-            self.source.shuffle_if_needed(shuffle_strategy);
+        /// Shuffles the dispenser if we have reached the configured shoe penetration
+        pub(crate) fn shuffle_if_needed(&mut self, threshold: f32) {
+            self.source.shuffle_if_needed(threshold);
         }
     }
 
     /// A source of cards
     trait CardSource {
         fn draw_card(&mut self) -> Card;
-        fn shuffle_if_needed(&mut self, shuffle_strategy: &ShuffleStrategy);
+        fn shuffle_if_needed(&mut self, threshold: f32);
         fn shuffle(&mut self) {}
     }
 
@@ -455,36 +454,13 @@ pub(crate) mod dispenser {
             }
             Card::from_ordinal(ordinal)
         }
-        fn shuffle_if_needed(&mut self, shuffle_strategy: &ShuffleStrategy) {
-            match shuffle_strategy {
-                ShuffleStrategy::Continuous => self.shuffle(),
-                ShuffleStrategy::Quarter => {
-                    if count(&self.remaining) <= self.size as u16 * (52 * 3 / 4) {
-                        println!("The shoe is a quarter empty. Shuffling...");
-                        self.shuffle();
-                    }
-                }
-                ShuffleStrategy::Half => {
-                    if count(&self.remaining) <= self.size as u16 * (52 / 2) {
-                        println!("The shoe is half empty. Shuffling...");
-                        self.shuffle();
-                    }
-                }
-                ShuffleStrategy::ThreeQuarters => {
-                    if count(&self.remaining) <= self.size as u16 * (52 / 4) {
-                        println!("The shoe is three quarters empty. Shuffling...");
-                        self.shuffle();
-                    }
-                }
-                ShuffleStrategy::Empty => {
-                    if count(&self.remaining) <= 1 {
-                        println!("The shoe is empty. Shuffling...");
-                        self.shuffle();
-                    }
-                }
-            }
-            fn count(remaining: &[u16; 52]) -> u16 {
-                remaining.iter().sum()
+        fn shuffle_if_needed(&mut self, threshold: f32) {
+            let shoe_size = self.size as u16 * 52;
+            let cards_played = shoe_size - self.remaining.iter().sum::<u16>();
+            let penetration = cards_played as f32 / shoe_size as f32;
+            if penetration >= threshold {
+                println!("The dealer shuffles the shoe...");
+                self.shuffle();
             }
         }
         fn shuffle(&mut self) {
@@ -494,27 +470,10 @@ pub(crate) mod dispenser {
         }
     }
 
-    /// An infinite deck never runs out of cards and is always uniformly distributed
-    struct InfiniteDeck;
-
-    impl CardSource for InfiniteDeck {
-        /// Draws a random card from the infinite deck
-        fn draw_card(&mut self) -> Card {
-            random()
-        }
-        /// An infinite deck never needs shuffling
-        fn shuffle_if_needed(&mut self, _shuffle_strategy: &ShuffleStrategy) {
-            // Do nothing
-        }
-    }
-
-    impl From<Option<u8>> for CardDispenser {
-        fn from(value: Option<u8>) -> Self {
-            let dispenser: Box<dyn CardSource> = match value {
-                Some(decks) => Box::new(Shoe::with_decks(decks)),
-                None => Box::new(InfiniteDeck),
-            };
-            CardDispenser { source: dispenser }
+    impl From<u8> for CardDispenser {
+        fn from(decks: u8) -> Self {
+            let shoe = Shoe::with_decks(decks);
+            CardDispenser { source: shoe }
         }
     }
 }
