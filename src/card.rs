@@ -1,11 +1,14 @@
-use std::fmt::{self, Display, Formatter};
-use std::ops::AddAssign;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
+use std::fmt::{self, Display, Formatter};
+use std::ops::AddAssign;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum Suit {
-    Clubs, Diamonds, Hearts, Spades,
+    Clubs,
+    Diamonds,
+    Hearts,
+    Spades,
 }
 
 impl Suit {
@@ -27,9 +30,21 @@ impl Distribution<Suit> for Standard {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum Rank {
-    Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Ace,
+    Two,
+    Three,
+    Four,
+    Five,
+    Six,
+    Seven,
+    Eight,
+    Nine,
+    Ten,
+    Jack,
+    Queen,
+    King,
+    Ace,
 }
 
 impl Rank {
@@ -68,6 +83,11 @@ impl Rank {
             Rank::Ace => 11,
         }
     }
+    fn value(&self) -> Value {
+        let soft = self == &Rank::Ace;
+        let total = self.worth();
+        Value { soft, total }
+    }
 }
 
 /// Allows us to draw a randomly generated rank
@@ -97,6 +117,7 @@ impl Display for Rank {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct Card {
     rank: Rank,
     suit: Suit,
@@ -109,9 +130,7 @@ impl Card {
         Card { rank, suit }
     }
     fn value(&self) -> Value {
-        let soft = self.rank == Rank::Ace;
-        let total = self.rank.worth();
-        Value { soft, total }
+        self.rank.value()
     }
 }
 
@@ -130,6 +149,7 @@ impl Display for Card {
 }
 
 /// Represents the game value of a card or multiple cards
+#[derive(Debug, PartialEq)]
 pub(crate) struct Value {
     soft: bool,
     total: u8,
@@ -137,7 +157,10 @@ pub(crate) struct Value {
 
 impl Value {
     fn zero() -> Self {
-        Value { soft: false, total: 0 }
+        Value {
+            soft: false,
+            total: 0,
+        }
     }
 }
 
@@ -158,14 +181,24 @@ impl AddAssign for Value {
     }
 }
 
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {}",
+            if self.soft { "Soft" } else { "Hard" },
+            self.total
+        )
+    }
+}
+
 pub(crate) mod hand {
+    use crate::card::{Card, Value};
+    use crate::{BlackjackPayout, Soft17};
     use std::cmp::Ordering;
-    use std::fmt::{self, Display, Formatter};
     use std::ops::AddAssign;
     use std::thread;
     use std::time::Duration;
-    use crate::card::{Card, Value};
-    use crate::{BlackjackPayout, Soft17};
 
     pub(crate) trait Hand {
         fn value(&self) -> &Value;
@@ -204,7 +237,7 @@ pub(crate) mod hand {
     pub(crate) struct PlayerHand {
         cards: Vec<Card>,
         value: Value, // (soft, total)
-        stood: bool,   // Whether the player has stood on this hand
+        stood: bool,  // Whether the player has stood on this hand
         surrendered: bool,
         bet: u32,
     }
@@ -216,7 +249,7 @@ pub(crate) mod hand {
                 value: Value::zero(),
                 stood: false,
                 surrendered: false,
-                bet
+                bet,
             };
             hand += card; // Use AddAssign to update the hand and announce the card
             hand
@@ -266,24 +299,28 @@ pub(crate) mod hand {
             match result {
                 HandResult::Blackjack => match payout {
                     BlackjackPayout::ThreeToTwo => self.bet + self.bet * 3 / 2, // 1.5x win
-                    BlackjackPayout::SixToFive => self.bet + self.bet * 6 / 5, // 1.2x win
+                    BlackjackPayout::SixToFive => self.bet + self.bet * 6 / 5,  // 1.2x win
                 },
                 HandResult::Win => self.bet + self.bet, // 1x win
-                HandResult::Push => self.bet, // Bet is returned
-                HandResult::Lose => 0, // Bet is lost
+                HandResult::Push => self.bet,           // Bet is returned
+                HandResult::Lose => 0,                  // Bet is lost
             }
         }
     }
 
     pub(crate) struct DealerHand {
         cards: Vec<Card>,
-        value: Value, // (soft, total)
+        value: Value,   // (soft, total)
         soft17: Soft17, // Whether the dealer stands or hits on soft 17
     }
 
     impl DealerHand {
         pub(crate) fn new(card: Card, soft17: Soft17) -> Self {
-            let mut hand = DealerHand { cards: Vec::new(), value: Value::zero(), soft17 };
+            let mut hand = DealerHand {
+                cards: Vec::new(),
+                value: Value::zero(),
+                soft17,
+            };
             hand += card; // Use AddAssign to update the value and announce the card
             hand
         }
@@ -324,7 +361,8 @@ pub(crate) mod hand {
             thread::sleep(Duration::from_secs(1));
             self.value += rhs.value();
             let total = self.value.total;
-            if self.cards.len() != 1 { // Announce the card unless it is the second (down) card
+            if self.cards.len() != 1 {
+                // Announce the card unless it is the second (down) card
                 print!("The dealer draws {}. ", rhs);
                 if total > 21 {
                     println!("Dealer bust!");
@@ -381,25 +419,14 @@ pub(crate) mod hand {
         Blackjack,
         Bust,
     }
-
-    impl Display for PlayerHand {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            write!(
-                f,
-                "{} {}",
-                if self.value.soft { "Soft" } else { "Hard" },
-                self.value.total
-            )
-        }
-    }
 }
 
 pub(crate) mod dispenser {
+    use crate::card::Card;
+    use rand::distributions::WeightedIndex;
+    use rand::{thread_rng, Rng};
     use std::thread;
     use std::time::Duration;
-    use rand::distributions::WeightedIndex;
-    use rand::{Rng, thread_rng};
-    use crate::card::Card;
 
     /// A generic dispenser of cards
     pub(crate) struct CardDispenser {
@@ -437,7 +464,11 @@ pub(crate) mod dispenser {
         fn with_decks(size: u8) -> Self {
             let remaining = [size as u16; 52];
             let dist = WeightedIndex::new(remaining).unwrap();
-            Shoe { size, dist, remaining }
+            Shoe {
+                size,
+                dist,
+                remaining,
+            }
         }
     }
 
@@ -459,7 +490,7 @@ pub(crate) mod dispenser {
             let cards_played = shoe_size - self.remaining.iter().sum::<u16>();
             let penetration = cards_played as f32 / shoe_size as f32;
             if penetration >= threshold {
-                println!("The dealer shuffles the shoe...");
+                println!("The shoe is shuffled...");
                 self.shuffle();
             }
         }

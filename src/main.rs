@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 
-mod game;
 mod card;
+mod game;
 mod io;
 
 #[derive(Debug, Parser)]
@@ -30,15 +30,17 @@ pub struct Configuration {
     #[arg(long)]
     pub min_bet: Option<u32>,
     /// Whether to allow surrendering.
-    #[arg(long, value_enum, default_value_t = Surrender::None)]
-    pub surrender: Surrender,
+    #[arg(long, value_enum, default_value_t = SurrenderAllowed::None)]
+    pub surrender: SurrenderAllowed,
     /// Whether to offer insurance.
     #[arg(long, short, default_value_t = false)]
     pub insurance: bool, // TODO: Implement
 }
 
 fn parse_float_between_0_and_1(s: &str) -> Result<f32, String> {
-    let f = s.parse::<f32>().map_err(|_| format!("{} is not a valid float", s))?;
+    let f = s
+        .parse::<f32>()
+        .map_err(|_| format!("{} is not a valid float", s))?;
     if (0.0..=1.0).contains(&f) {
         Ok(f)
     } else {
@@ -67,7 +69,7 @@ pub enum BlackjackPayout {
 /// Surrendering allows the player to forfeit their hand and receive half their bet back,
 /// in case they think they have a low chance of winning.
 #[derive(Debug, Clone, PartialEq, ValueEnum)]
-pub enum Surrender {
+pub enum SurrenderAllowed {
     /// No surrendering allowed.
     None,
     /// Surrendering allowed before the dealer checks their hole card for blackjack.

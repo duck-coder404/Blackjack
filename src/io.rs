@@ -1,16 +1,12 @@
+use crate::SurrenderAllowed;
 use std::fmt::{Display, Formatter};
-use std::{fmt, io};
 use std::str::FromStr;
-use crate::Surrender;
+use std::{fmt, io};
 
 /// Prompts the player to place a bet or quit
 /// Returns Some(bet) if the player wants to bet bet chips
 /// Returns None if the player wants to quit
-pub(crate) fn place_bet(
-    chips: u32,
-    max_bet: Option<u32>,
-    min_bet: Option<u32>,
-) -> Option<u32> {
+pub(crate) fn place_bet(chips: u32, max_bet: Option<u32>, min_bet: Option<u32>) -> Option<u32> {
     if chips == 0 {
         println!("You are out of chips!");
         return None;
@@ -49,13 +45,6 @@ pub(crate) enum Action {
     Surrender,
 }
 
-macro_rules! offer {
-    ($string:expr, $action:ident) => {
-        let formatted = format!("{:15}", format!("{}", Action::$action));
-        $string.push_str(&formatted);
-    }
-}
-
 /// Prompts the player to make a move
 /// Which actions are available depends on the number of cards in the hand,
 /// whether the hand is a pair, and whether the player has enough chips to double their bet
@@ -63,27 +52,35 @@ pub(crate) fn make_move(
     cards: usize,
     is_pair: bool,
     can_double_bet: bool,
-    surrender: &Surrender,
+    surrender: &SurrenderAllowed,
 ) -> Action {
-    let mut offering = String::new();
-    offer!(offering, Hit);
-    offer!(offering, Stand);
+    let mut allowed_moves = Vec::with_capacity(5);
+    allowed_moves.push(Action::Hit);
+    allowed_moves.push(Action::Stand);
     if can_double_bet && cards == 2 {
-        offer!(offering, DoubleDown);
+        allowed_moves.push(Action::DoubleDown);
     }
     if can_double_bet && is_pair {
-        offer!(offering, Split);
+        allowed_moves.push(Action::Split);
     }
-    if surrender == &Surrender::Late || surrender == &Surrender::Both {
-        offer!(offering, Surrender);
+    if surrender == &SurrenderAllowed::Late || surrender == &SurrenderAllowed::Both {
+        allowed_moves.push(Action::Surrender);
     }
-    println!("{}", offering);
-    offering.clear(); // Reuse the string
+    let allowed_moves = allowed_moves
+        .into_iter()
+        .fold(String::new(), |mut acc, action| {
+            let formatted = format!("{:15}", format!("{}", action));
+            acc.push_str(&formatted);
+            acc
+        });
+    println!("{}", allowed_moves);
+
+    let mut input = String::new();
     loop {
         io::stdin()
-            .read_line(&mut offering)
+            .read_line(&mut input)
             .expect("Failed to read input");
-        match offering.trim().parse() {
+        match input.trim().parse() {
             Ok(action) => match action {
                 Action::DoubleDown if cards != 2 => {
                     println!("You can only double down on your first two cards!")
@@ -99,7 +96,7 @@ pub(crate) fn make_move(
             },
             Err(_) => println!("Please enter a valid action!"),
         };
-        offering.clear();
+        input.clear();
     }
 }
 

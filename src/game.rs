@@ -1,15 +1,16 @@
 use std::thread;
 use std::time::Duration;
 
-use crate::card::hand::{DealerHand, Hand, PlayerHand};
 use crate::card::dispenser::CardDispenser;
+use crate::card::hand::{DealerHand, Hand, PlayerHand};
 use crate::io::{make_move, offer_early_surrender, place_bet, Action};
-use crate::{Configuration, Surrender};
+use crate::{Configuration, SurrenderAllowed};
 
 pub fn play(config: Configuration) {
     println!("Welcome to Blackjack!");
     let mut dispenser: CardDispenser = config.decks.into();
     let mut player_chips = config.chips;
+
     while let Some(bet) = place_bet(player_chips, config.max_bet, config.min_bet) {
         player_chips -= bet;
         println!("You bet {bet} chips. You have {player_chips} chips remaining.");
@@ -21,7 +22,8 @@ pub fn play(config: Configuration) {
         dealer_hand += dispenser.draw_card();
 
         if dealer_hand.showing() >= 10 {
-            if (config.surrender == Surrender::Early || config.surrender == Surrender::Both)
+            if (config.surrender == SurrenderAllowed::Early
+                || config.surrender == SurrenderAllowed::Both)
                 && offer_early_surrender()
             {
                 println!("You surrender!");
@@ -44,10 +46,13 @@ pub fn play(config: Configuration) {
             );
         }
 
-        // At this point, all player hands are done and the dealer reveals their down card
+        // At this point, all player hands are done and the dealer reveals their hole card
         dealer_hand.reveal_hole_card();
 
-        if player_hands.iter().any(|hand| hand.is_stood()) {
+        if player_hands
+            .iter()
+            .any(|hand| hand.is_stood() && !hand.is_blackjack())
+        {
             // At least one hand was played and stood on, so the dealer must finish their hand
             while !dealer_hand.is_over() {
                 dealer_hand += dispenser.draw_card();
@@ -73,6 +78,7 @@ pub fn play(config: Configuration) {
         pause();
         dispenser.shuffle_if_needed(config.penetration);
     }
+
     println!("You finished with {player_chips} chips.");
     println!("Goodbye!");
     pause();
@@ -83,13 +89,13 @@ fn play_hands(
     dealer_hand: &DealerHand,
     dispenser: &mut CardDispenser,
     player_chips: &mut u32,
-    surrender: &Surrender,
+    surrender: &SurrenderAllowed,
 ) {
     while let Some(hand) = hands.iter_mut().find(|hand| !hand.is_over()) {
         pause();
         println!(
             "What would you like to do? ({} against {})",
-            hand,
+            hand.value(),
             dealer_hand.showing()
         );
         match make_move(
@@ -112,7 +118,10 @@ fn play_hands(
                 hand.double(dispenser.draw_card());
             }
             Action::Split => {
-                println!("You split your hand and put another {} chips down!", hand.bet());
+                println!(
+                    "You split your hand and put another {} chips down!",
+                    hand.bet()
+                );
                 *player_chips -= hand.bet(); // The player pays another equal bet for the new hand
                 let mut new_hand = PlayerHand::split(hand);
                 *hand += dispenser.draw_card();
