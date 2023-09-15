@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::card::dispenser::CardDispenser;
 use crate::card::hand::{DealerHand, Hand, PlayerHand};
-use crate::io::{make_move, offer_early_surrender, place_bet, Action};
+use crate::io::{make_move, offer_early_surrender, place_bet, Action, offer_insurance};
 use crate::{Configuration, SurrenderAllowed};
 
 pub fn play(config: Configuration) {
@@ -21,6 +21,7 @@ pub fn play(config: Configuration) {
         player_hand += dispenser.draw_card();
         dealer_hand += dispenser.draw_card();
 
+        let mut insurance = 0;
         if dealer_hand.showing() >= 10 {
             if (config.surrender == SurrenderAllowed::Early
                 || config.surrender == SurrenderAllowed::Both)
@@ -28,6 +29,9 @@ pub fn play(config: Configuration) {
             {
                 println!("You surrender!");
                 player_hand.surrender();
+            } else if config.insurance && dealer_hand.showing() == 11 {
+                insurance = offer_insurance(bet);
+                player_chips -= insurance;
             }
             pause();
             println!("The dealer checks their hand for blackjack...");
@@ -62,10 +66,14 @@ pub fn play(config: Configuration) {
         // At this point, all hands are done
         // For each hand, determine the result and payout
         let dealer_status = dealer_hand.status();
-        let chips_won: u32 = player_hands
+        let mut chips_won: u32 = player_hands
             .into_iter()
             .map(|hand| hand.winnings(&dealer_status, &config.blackjack_payout))
             .sum();
+
+        if insurance > 0 && dealer_hand.is_blackjack() {
+            chips_won += insurance * 2;
+        }
 
         pause();
         match chips_won {

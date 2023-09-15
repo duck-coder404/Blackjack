@@ -149,3 +149,22 @@ pub(crate) fn offer_early_surrender() -> bool {
         input.clear();
     }
 }
+
+pub(crate) fn offer_insurance(original_bet: u32) -> u32 {
+    println!("Would you like to bet on the dealer having blackjack? Enter your bet or 0 to decline.");
+    let mut input = String::new();
+    loop {
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read input");
+        match input.trim().parse() {
+            Ok(bet) if bet > original_bet / 2 => println!("You cannot bet more than half your original bet!"),
+            Ok(bet) => {
+                println!("You place an insurance bet of {} chips.", bet);
+                return bet;
+            },
+            Err(_) => println!("Please enter a number!"),
+        }
+        input.clear();
+    }
+}
