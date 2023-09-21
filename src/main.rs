@@ -34,7 +34,7 @@ pub struct Configuration {
     pub surrender: SurrenderAllowed,
     /// Whether to offer insurance.
     #[arg(long, short, default_value_t = false)]
-    pub insurance: bool, // TODO: Implement
+    pub insurance: bool,
 }
 
 fn parse_float_between_0_and_1(s: &str) -> Result<f32, String> {
@@ -68,6 +68,7 @@ pub enum BlackjackPayout {
 
 /// Surrendering allows the player to forfeit their hand and receive half their bet back,
 /// in case they think they have a low chance of winning.
+/// Some casinos offer this, while others don't.
 #[derive(Debug, Clone, PartialEq, ValueEnum)]
 pub enum SurrenderAllowed {
     /// No surrendering allowed.

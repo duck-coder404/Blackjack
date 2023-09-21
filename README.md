@@ -14,10 +14,11 @@ This is a simple command-line Blackjack game that I made in Rust.
 - [x] Configurable starting chips
 - [x] Configurable Blackjack payout (3:2 or 6:5)
 - [x] Surrendering (early and late)
+- [x] Insurance (even though it's a bad idea)
 
 ## TODOs
 
-- [ ] Insurance (even though it's a bad idea)
 - [ ] Configurable double after split
 - [ ] Configurable resplitting aces
 - [ ] Multiplayer support
+- [ ] Browser-based GUI
