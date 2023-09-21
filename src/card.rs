@@ -1,71 +1,19 @@
-use rand::distributions::{Distribution, Standard};
-use rand::Rng;
 use std::fmt::{self, Display, Formatter};
 use std::ops::AddAssign;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum Suit {
-    Clubs,
-    Diamonds,
-    Hearts,
-    Spades,
-}
-
-impl Suit {
-    fn from_ordinal(ordinal: usize) -> Self {
-        match ordinal {
-            0 => Suit::Clubs,
-            1 => Suit::Diamonds,
-            2 => Suit::Hearts,
-            3 => Suit::Spades,
-            _ => panic!("Invalid ordinal"),
-        }
-    }
-}
-
-/// Allows us to draw a randomly generated suit
-impl Distribution<Suit> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Suit {
-        Suit::from_ordinal(rng.gen_range(0..=3))
-    }
+    Clubs, Diamonds, Hearts, Spades
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum Rank {
-    Two,
-    Three,
-    Four,
-    Five,
-    Six,
-    Seven,
-    Eight,
-    Nine,
-    Ten,
-    Jack,
-    Queen,
-    King,
-    Ace,
+    Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Ace
 }
 
 impl Rank {
-    fn from_ordinal(ordinal: usize) -> Self {
-        match ordinal {
-            0 => Rank::Two,
-            1 => Rank::Three,
-            2 => Rank::Four,
-            3 => Rank::Five,
-            4 => Rank::Six,
-            5 => Rank::Seven,
-            6 => Rank::Eight,
-            7 => Rank::Nine,
-            8 => Rank::Ten,
-            9 => Rank::Jack,
-            10 => Rank::Queen,
-            11 => Rank::King,
-            12 => Rank::Ace,
-            _ => panic!("Invalid ordinal"),
-        }
-    }
+    /// Returns how much a card with this rank is worth in the game.
+    /// All face cards are worth 10, and aces are worth 11.
     fn worth(&self) -> u8 {
         match self {
             Rank::Two => 2,
@@ -83,6 +31,9 @@ impl Rank {
             Rank::Ace => 11,
         }
     }
+
+    /// Returns the value of this rank as a hand value.
+    /// Only aces are soft.
     fn value(&self) -> Value {
         let soft = self == &Rank::Ace;
         let total = self.worth();
@@ -90,14 +41,8 @@ impl Rank {
     }
 }
 
-/// Allows us to draw a randomly generated rank
-impl Distribution<Rank> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rank {
-        Rank::from_ordinal(rng.gen_range(0..=12))
-    }
-}
-
 impl Display for Rank {
+    /// Ranks are displayed as "a Rank", e.g. "a Two", "a Seven", "an Eight", "an Ace"
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Rank::Two => write!(f, "a Two"),
@@ -117,6 +62,7 @@ impl Display for Rank {
     }
 }
 
+/// A card is a combination of a rank and a suit.
 #[derive(Debug, PartialEq)]
 pub(crate) struct Card {
     rank: Rank,
@@ -124,71 +70,82 @@ pub(crate) struct Card {
 }
 
 impl Card {
+    /// Returns the card corresponding to the given ordinal value (0-51).
+    /// The ordinal value is the index of the card in a deck sorted by rank and then suit,
+    /// e.g. twos first, then threes, fours, etc.
     fn from_ordinal(ordinal: usize) -> Self {
-        let rank = Rank::from_ordinal(ordinal / 4);
-        let suit = Suit::from_ordinal(ordinal % 4);
+        let rank = match ordinal / 4 {
+            0 => Rank::Two,
+            1 => Rank::Three,
+            2 => Rank::Four,
+            3 => Rank::Five,
+            4 => Rank::Six,
+            5 => Rank::Seven,
+            6 => Rank::Eight,
+            7 => Rank::Nine,
+            8 => Rank::Ten,
+            9 => Rank::Jack,
+            10 => Rank::Queen,
+            11 => Rank::King,
+            12 => Rank::Ace,
+            _ => panic!("Invalid ordinal"),
+        };
+        let suit = match ordinal % 4 {
+            0 => Suit::Clubs,
+            1 => Suit::Diamonds,
+            2 => Suit::Hearts,
+            3 => Suit::Spades,
+            _ => panic!("Invalid ordinal"),
+        };
         Card { rank, suit }
     }
+
+    /// Returns the value of this card as a hand value.
+    /// This is the same as the value of the card's rank.
     fn value(&self) -> Value {
         self.rank.value()
     }
 }
 
-/// Allows us to draw a randomly generated card
-impl Distribution<Card> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Card {
-        Card::from_ordinal(rng.gen_range(0..=51))
-    }
-}
-
-/// Cards are displayed as "a Rank of Suit", e.g. "a Two of Clubs"
 impl Display for Card {
+    /// Cards are displayed as "a Rank of Suit", e.g. "a Two of Clubs"
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{} of {:?}", self.rank, self.suit)
     }
 }
 
-/// Represents the game value of a card or multiple cards
-#[derive(Debug, PartialEq)]
+/// Represents the game value of a hand
+#[derive(Debug, PartialEq, Default)]
 pub(crate) struct Value {
+    /// Whether the hand has an ace that is currently worth 11
     soft: bool,
+    /// The total value of the hand
     total: u8,
 }
 
-impl Value {
-    fn zero() -> Self {
-        Value {
-            soft: false,
-            total: 0,
-        }
-    }
-}
-
 impl AddAssign for Value {
+    /// Adds two hand values together, taking care to handle soft values and avoid busting if possible
     fn add_assign(&mut self, mut rhs: Self) {
-        self.total += rhs.total;
-        // If rhs is soft, we can subtract 10 to avoid busting
-        if self.total > 21 && rhs.soft {
-            self.total -= 10;
+        // Check if adding the totals would bust
+        if rhs.soft && self.total + rhs.total > 21 {
+            // If rhs is soft, we can subtract 10 to avoid busting
+            rhs.total -= 10;
             rhs.soft = false;
         }
-        // If that didn't work, we can try again if self is also soft
-        if self.total > 21 && self.soft {
+        if self.soft && self.total + rhs.total > 21 {
+            // If that didn't work, we can try again if self is also soft
             self.total -= 10;
             self.soft = false;
         }
-        self.soft = self.soft || rhs.soft; // If one remains soft, the result is soft
+        self.total += rhs.total;
+        self.soft |= rhs.soft;
     }
 }
 
 impl Display for Value {
+    /// A hand is displayed as "Soft/Hard total", e.g. "Soft 20"
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} {}",
-            if self.soft { "Soft" } else { "Hard" },
-            self.total
-        )
+        write!(f, "{} {}", if self.soft { "Soft" } else { "Hard" }, self.total)
     }
 }
 
@@ -200,29 +157,50 @@ pub(crate) mod hand {
     use std::thread;
     use std::time::Duration;
 
+    /// Represents a hand of cards
     pub(crate) trait Hand {
+        /// Returns a reference to the value of this hand.
         fn value(&self) -> &Value;
+
+        /// Returns a slice of the cards in this hand.
         fn cards(&self) -> &[Card];
+
+        /// Returns whether this hand has been stood on.
+        /// A hand is stood on when the player chooses to stop drawing cards.
         fn is_stood(&self) -> bool;
+
+        /// Returns whether this hand is a blackjack, or "natural" 21.
+        /// A blackjack is a hand with only two cards with a total value of 21.
         fn is_blackjack(&self) -> bool {
-            self.is_21() && self.len() == 2
+            self.is_21() && self.cards().len() == 2
         }
+
+        /// Returns whether this hand has a value of 21.
         fn is_21(&self) -> bool {
             self.value().total == 21
         }
+
+        /// Returns whether this hand has bust.
+        /// A hand busts when its value exceeds 21.
         fn is_bust(&self) -> bool {
             self.value().total > 21
         }
+
+        /// Returns whether this hand is over, or cannot be played anymore.
+        /// This could be because it was stood on, busted, or is a blackjack.
         fn is_over(&self) -> bool {
             self.is_stood() || self.is_bust() || self.is_blackjack()
         }
-        fn len(&self) -> usize {
-            self.cards().len()
-        }
+
+        /// Returns whether this hand is a pair.
+        /// A pair is a hand consisting of only two cards with equal rank.
         fn is_pair(&self) -> bool {
             let cards = self.cards();
             cards.len() == 2 && cards[0].rank == cards[1].rank
         }
+
+        /// Returns the status of this hand.
+        /// A hand can be Ok(total), Blackjack, or Bust.
         fn status(&self) -> HandStatus {
             if self.is_blackjack() {
                 HandStatus::Blackjack
@@ -234,19 +212,26 @@ pub(crate) mod hand {
         }
     }
 
+    /// Represents a hand of cards held by the player.
     pub(crate) struct PlayerHand {
+        /// The cards in this hand
         cards: Vec<Card>,
-        value: Value, // (soft, total)
-        stood: bool,  // Whether the player has stood on this hand
+        /// The value of this hand
+        value: Value,
+        /// Whether the player has stood on this hand
+        stood: bool,
+        /// Whether the player has surrendered this hand
         surrendered: bool,
+        /// The player's bet on this hand
         bet: u32,
     }
 
     impl PlayerHand {
+        /// Begins a new hand with the given card and bet.
         pub(crate) fn new(card: Card, bet: u32) -> Self {
             let mut hand = PlayerHand {
                 cards: Vec::new(),
-                value: Value::zero(),
+                value: Value::default(),
                 stood: false,
                 surrendered: false,
                 bet,
@@ -254,30 +239,42 @@ pub(crate) mod hand {
             hand += card; // Use AddAssign to update the hand and announce the card
             hand
         }
+
+        /// Returns the bet on this hand.
         pub(crate) fn bet(&self) -> u32 {
             self.bet
         }
+
+        /// The player stands on this hand.
         pub(crate) fn stand(&mut self) {
             self.stood = true;
         }
+
+        /// The player doubles down on this hand.
+        /// The bet is doubled, and the provided card is added to the hand.
+        /// If the hand is not bust, the player stands.
         pub(crate) fn double(&mut self, card: Card) {
-            self.bet += self.bet;
+            self.bet *= 2;
             *self += card;
             self.stood = self.value.total <= 21; // Stand if we didn't bust
         }
-        /// Splits the hand
-        /// The card taken from this hand is returned, so it can be used to create a new hand
-        pub(crate) fn split(hand: &mut PlayerHand) -> PlayerHand {
-            debug_assert!(hand.is_pair(), "Cannot split hand that is not a pair");
-            let split_card = hand.cards.pop().unwrap();
-            hand.value = hand.cards[0].value();
-            PlayerHand::new(split_card, hand.bet)
+
+        /// The player splits the hand into two hands. This hand must be a pair!
+        /// The new hand has the same bet as the original hand.
+        pub(crate) fn split(&mut self) -> Self {
+            debug_assert!(self.is_pair(), "Cannot split hand that is not a pair");
+            let split_card = self.cards.pop().unwrap(); // Remove the second card
+            self.value = self.cards[0].value(); // The value of this hand is now the first card
+            PlayerHand::new(split_card, self.bet) // Create a new hand with the second card
         }
+
+        /// The player surrenders this hand.
         pub(crate) fn surrender(&mut self) {
             self.surrendered = true;
         }
-        /// Compares the status of this hand to the status of the dealer's hand
-        /// and computes the winnings
+
+        /// Returns the winnings of this hand, given the status of the dealer's hand
+        /// and the blackjack payout setting.
         pub(crate) fn winnings(&self, dealer_status: &HandStatus, payout: &BlackjackPayout) -> u32 {
             if self.surrendered {
                 return self.bet / 2; // Half the bet is returned
@@ -308,25 +305,34 @@ pub(crate) mod hand {
         }
     }
 
+    /// Represents the dealer's hand.
     pub(crate) struct DealerHand {
+        /// The cards in this hand
         cards: Vec<Card>,
-        value: Value,   // (soft, total)
-        soft17: Soft17, // Whether the dealer stands or hits on soft 17
+        /// The value of this hand
+        value: Value,
+        /// Whether the dealer stands or hits on soft 17
+        soft17: Soft17,
     }
 
     impl DealerHand {
+        /// Begins a new hand with the given card and soft 17 setting.
         pub(crate) fn new(card: Card, soft17: Soft17) -> Self {
             let mut hand = DealerHand {
                 cards: Vec::new(),
-                value: Value::zero(),
+                value: Value::default(),
                 soft17,
             };
             hand += card; // Use AddAssign to update the value and announce the card
             hand
         }
+
+        /// Returns the value of the dealer's up card, which is what the player can see.
         pub(crate) fn showing(&self) -> u8 {
             self.cards[0].rank.worth()
         }
+
+        /// Announces the dealer's hole card for the player to see.
         pub(crate) fn reveal_hole_card(&self) {
             thread::sleep(Duration::from_secs(1));
             print!("The dealer reveals {}. ", self.cards[1]);
@@ -339,37 +345,36 @@ pub(crate) mod hand {
     }
 
     impl AddAssign<Card> for PlayerHand {
+        /// Adds a card to the player's hand, updating the value and announcing the card.
         fn add_assign(&mut self, rhs: Card) {
             thread::sleep(Duration::from_secs(1));
             self.value += rhs.value();
-            let total = self.value.total;
-            if total >= 21 {
-                self.stood = true; // We can't hit anymore
-            }
             print!("You draw {}. ", rhs);
             self.cards.push(rhs);
-            match total {
+            match self.value.total {
                 22.. => println!("You bust!"),
-                21 if self.len() == 2 => println!("Blackjack!"),
-                _ => println!("You have {}.", total),
+                21 if self.cards.len() == 2 => println!("Blackjack!"),
+                total => println!("You have {}.", total),
             }
         }
     }
 
     impl AddAssign<Card> for DealerHand {
+        /// Adds a card to the dealer's hand, updating the value and announcing the card.
+        /// The dealer's second (hole) card is not announced.
         fn add_assign(&mut self, rhs: Card) {
             thread::sleep(Duration::from_secs(1));
             self.value += rhs.value();
-            let total = self.value.total;
             if self.cards.len() != 1 {
-                // Announce the card unless it is the second (down) card
+                // Announce the card if it is not the dealer's second card
                 print!("The dealer draws {}. ", rhs);
-                if total > 21 {
+                if self.value.total > 21 {
                     println!("Dealer bust!");
                 } else {
-                    println!("The dealer has {}.", total);
+                    println!("The dealer has {}.", self.value.total);
                 }
             } else {
+                // The hole card is kept secret until later
                 println!("The dealer draws a card.");
             }
             self.cards.push(rhs);
@@ -377,35 +382,46 @@ pub(crate) mod hand {
     }
 
     impl Hand for PlayerHand {
+        /// Returns the value of this hand.
         fn value(&self) -> &Value {
             &self.value
         }
+
+        /// Returns the cards in this hand.
         fn cards(&self) -> &[Card] {
             &self.cards
         }
+
+        /// Returns true if the player has stood or surrendered this hand.
         fn is_stood(&self) -> bool {
             self.stood || self.surrendered
         }
     }
 
     impl Hand for DealerHand {
+        /// Returns the value of this hand.
         fn value(&self) -> &Value {
             &self.value
         }
+
+        /// Returns the cards in this hand.
         fn cards(&self) -> &[Card] {
             &self.cards
         }
+
+        /// Returns true if the dealer is required to stand on this hand.
+        /// For soft 17s, this depends on the setting.
+        /// Otherwise, the dealer stands on any 17 or higher.
         fn is_stood(&self) -> bool {
-            if let (true, 17) = (self.value.soft, self.value.total) {
-                self.soft17 == Soft17::Stand // Done on soft 17 if dealer stands on soft 17
-            } else {
-                self.value.total >= 17 // Otherwise done if we have any 17 or more
+            match (self.value.soft, self.value.total) {
+                (true, 17) => self.soft17 == Soft17::Stand, // Stand on soft 17 if casino rules say so
+                (_, total) => total >= 17,              // Otherwise done if we have any 17 or more
             }
         }
     }
 
-    /// A hand can be compared to another hand to determine the result
-    /// Blackjack is a special kind of win, as it pays more
+    /// Represents the result of comparing a player's hand with the dealer's hand.
+    /// A Blackjack is distinct from a Win because it pays more.
     enum HandResult {
         Blackjack,
         Win,
@@ -413,7 +429,7 @@ pub(crate) mod hand {
         Lose,
     }
 
-    /// The status of a hand is either Ok(total), Blackjack, or Bust
+    /// Represents the status of a hand, either Ok(total), Blackjack, or Bust.
     pub(crate) enum HandStatus {
         Ok(u8),
         Blackjack,
@@ -421,6 +437,7 @@ pub(crate) mod hand {
     }
 }
 
+/// A module for dispensing cards.
 pub(crate) mod dispenser {
     use crate::card::Card;
     use rand::distributions::WeightedIndex;
@@ -428,7 +445,9 @@ pub(crate) mod dispenser {
     use std::thread;
     use std::time::Duration;
 
-    /// A generic dispenser of cards
+    /// Represents a generic dispenser of cards.
+    /// Not every dispenser is a shoe, but for now this is the only implementation.
+    /// Later, we may want to add specialty dispensers with different distributions.
     pub(crate) struct CardDispenser {
         source: Shoe,
     }
@@ -438,41 +457,48 @@ pub(crate) mod dispenser {
         pub(crate) fn draw_card(&mut self) -> Card {
             self.source.draw_card()
         }
+
         /// Shuffles the dispenser if we have reached the configured shoe penetration
         pub(crate) fn shuffle_if_needed(&mut self, threshold: f32) {
             self.source.shuffle_if_needed(threshold);
         }
     }
 
-    /// A source of cards
+    /// Represents a source of cards which can be drawn from.
     trait CardSource {
+        /// Draws a card.
         fn draw_card(&mut self) -> Card;
+
+        /// Shuffles the card source if we have used more than the specified proportion of cards.
         fn shuffle_if_needed(&mut self, threshold: f32);
+
+        /// Shuffles the card source. This has the effect of resetting it.
         fn shuffle(&mut self) {}
     }
 
     /// A shoe is a container that contains multiple decks of cards.
-    /// Shuffling replaces all the cards in the shoe.
     struct Shoe {
-        size: u8,
+        /// The number of decks in the shoe
+        decks: u8,
+        /// We use a weighted distribution to draw random cards from the shoe without replacement.
         dist: WeightedIndex<u16>,
-        remaining: [u16; 52], // Amount of each card remaining, indexed by ordinal
+        /// The number of each card remaining in the shoe, indexed by ordinal
+        remaining: [u16; 52],
     }
 
     impl Shoe {
         /// Create a new shoe with the given number of decks
-        fn with_decks(size: u8) -> Self {
-            let remaining = [size as u16; 52];
+        fn with_decks(decks: u8) -> Self {
+            let remaining = [decks as u16; 52]; // Start with all cards present
             let dist = WeightedIndex::new(remaining).unwrap();
-            Shoe {
-                size,
-                dist,
-                remaining,
-            }
+            Shoe { decks, dist, remaining }
         }
     }
 
     impl CardSource for Shoe {
+        /// Draws a random card from the shoe.
+        /// The card is removed from the shoe, and the distribution is updated to reflect the new weight.
+        /// If the last card is drawn, the shoe is shuffled.
         fn draw_card(&mut self) -> Card {
             let ordinal = thread_rng().sample(&self.dist);
             self.remaining[ordinal] -= 1; // Remove the card from the shoe
@@ -485,8 +511,10 @@ pub(crate) mod dispenser {
             }
             Card::from_ordinal(ordinal)
         }
+
+        /// Shuffles the shoe if we have reached the configured shoe penetration.
         fn shuffle_if_needed(&mut self, threshold: f32) {
-            let shoe_size = self.size as u16 * 52;
+            let shoe_size = self.decks as u16 * 52;
             let cards_played = shoe_size - self.remaining.iter().sum::<u16>();
             let penetration = cards_played as f32 / shoe_size as f32;
             if penetration >= threshold {
@@ -494,17 +522,19 @@ pub(crate) mod dispenser {
                 self.shuffle();
             }
         }
+
+        /// Shuffles the shoe.
         fn shuffle(&mut self) {
             thread::sleep(Duration::from_secs(1));
-            self.remaining = [self.size as u16; 52];
+            self.remaining = [self.decks as u16; 52];
             self.dist = WeightedIndex::new(self.remaining).unwrap();
         }
     }
 
     impl From<u8> for CardDispenser {
+        /// Creates a new card dispenser with the given number of decks.
         fn from(decks: u8) -> Self {
-            let shoe = Shoe::with_decks(decks);
-            CardDispenser { source: shoe }
+            CardDispenser { source: Shoe::with_decks(decks) }
         }
     }
 }

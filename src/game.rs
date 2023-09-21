@@ -107,7 +107,7 @@ fn play_hands(
             dealer_hand.showing()
         );
         match make_move(
-            hand.len(),
+            hand.cards().len(),
             hand.is_pair(),
             *player_chips >= hand.bet(),
             surrender,
@@ -131,7 +131,7 @@ fn play_hands(
                     hand.bet()
                 );
                 *player_chips -= hand.bet(); // The player pays another equal bet for the new hand
-                let mut new_hand = PlayerHand::split(hand);
+                let mut new_hand = hand.split();
                 *hand += dispenser.draw_card();
                 new_hand += dispenser.draw_card();
                 hands.push(new_hand);
