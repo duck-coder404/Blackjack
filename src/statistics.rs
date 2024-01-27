@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use crate::card::hand::HandStatus;
+use crate::card::hand::Status;
 use crate::game::EndTurn;
 
 #[derive(Default)]
@@ -39,10 +39,10 @@ impl Statistics {
         self.pushes += turn.player_hands.iter().filter(|hand| hand.winnings == hand.bet).count();
         self.losses += turn.player_hands.iter().filter(|hand| hand.winnings < hand.bet).count();
         self.total_bet += turn.player_hands.iter().map(|hand| hand.bet as usize).sum::<usize>();
-        self.blackjacks += turn.player_hands.iter().filter(|hand| hand.status == HandStatus::Blackjack).count();
-        self.busts += turn.player_hands.iter().filter(|hand| hand.status == HandStatus::Bust).count();
-        self.dealer_blackjacks += if turn.dealer_hand.status == HandStatus::Blackjack { 1 } else { 0 };
-        self.dealer_busts += if turn.dealer_hand.status == HandStatus::Bust { 1 } else { 0 };
+        self.blackjacks += turn.player_hands.iter().filter(|hand| hand.status == Status::Blackjack).count();
+        self.busts += turn.player_hands.iter().filter(|hand| hand.status == Status::Bust).count();
+        self.dealer_blackjacks += usize::from(turn.dealer_hand.status == Status::Blackjack);
+        self.dealer_busts += usize::from(turn.dealer_hand.status == Status::Bust);
     }
 }
 

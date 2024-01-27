@@ -49,7 +49,7 @@ impl Player {
     }
 
     pub fn wait(&self) {
-        self.strategy.sleep()
+        self.strategy.wait();
     }
 }
 
@@ -75,6 +75,6 @@ pub trait Strategy {
 
     /// Called for delays between actions
     /// Simulations can ignore this
-    fn sleep(&self) {}
+    fn wait(&self) {}
 
 }

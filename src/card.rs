@@ -1,5 +1,5 @@
 use std::fmt::{self, Display, Formatter};
-use crate::card::hand::HandValue;
+use crate::card::hand::Value;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum Suit {
@@ -14,7 +14,7 @@ enum Rank {
 impl Rank {
     /// Returns how much a card with this rank is worth in the game.
     /// All face cards are worth 10, and aces are worth 11.
-    fn worth(&self) -> u8 {
+    fn worth(self) -> u8 {
         match self {
             Rank::Two => 2,
             Rank::Three => 3,
@@ -24,10 +24,7 @@ impl Rank {
             Rank::Seven => 7,
             Rank::Eight => 8,
             Rank::Nine => 9,
-            Rank::Ten => 10,
-            Rank::Jack => 10,
-            Rank::Queen => 10,
-            Rank::King => 10,
+            Rank::Ten | Rank::Jack | Rank::Queen | Rank::King => 10,
             Rank::Ace => 11,
         }
     }
@@ -95,10 +92,10 @@ impl Card {
 
     /// Returns the value of this card as if it were alone in a hand.
     /// Aces are soft 11s, while all other cards are hard values.
-    pub fn value(&self) -> HandValue {
+    pub fn value(&self) -> Value {
         let soft = self.rank == Rank::Ace;
         let total = self.rank.worth();
-        HandValue { soft, total }
+        Value { soft, total }
     }
 }
 
@@ -118,14 +115,14 @@ pub mod hand {
 
     /// Represents the game value of a hand, e.g. "Soft 20"
     #[derive(Debug, PartialEq, Default)]
-    pub struct HandValue {
+    pub struct Value {
         /// Whether the hand has an ace that is currently worth 11
         pub soft: bool,
         /// The total value of the hand
         pub total: u8,
     }
 
-    impl AddAssign for HandValue {
+    impl AddAssign for Value {
         /// Adds two hand values together, taking care to handle soft values and avoid busting if possible
         fn add_assign(&mut self, mut rhs: Self) {
             // Check if adding the totals would bust
@@ -144,7 +141,7 @@ pub mod hand {
         }
     }
 
-    impl Display for HandValue {
+    impl Display for Value {
         /// A hand is displayed as "Soft/Hard total", e.g. "Soft 20"
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(f, "{} {}", if self.soft { "Soft" } else { "Hard" }, self.total)
@@ -154,7 +151,7 @@ pub mod hand {
     /// Represents the state of a hand.
     /// A hand in play must be acted upon until it is in a terminal state.
     #[derive(PartialEq, Default)]
-    pub enum HandStatus {
+    pub enum Status {
         #[default]
         InPlay,
         Stood,
@@ -169,9 +166,9 @@ pub mod hand {
         /// The cards in this hand
         pub cards: Vec<Card>,
         /// The value of this hand
-        pub value: HandValue,
+        pub value: Value,
         /// The status of this hand
-        pub status: HandStatus,
+        pub status: Status,
         /// Whether the dealer stands or hits on soft 17
         soft_17_hit: bool,
     }
@@ -193,7 +190,7 @@ pub mod hand {
         /// Announces the dealer's hole card and total.
         pub fn reveal_hole_card(&self) {
             print!("The dealer reveals {}. ", self.cards[1]);
-            if self.status == HandStatus::Blackjack {
+            if self.status == Status::Blackjack {
                 println!("The dealer has blackjack!");
             } else {
                 println!("The dealer has {}.", self.value.total);
@@ -206,24 +203,24 @@ pub mod hand {
         /// If this is the dealer's second card, it is not announced.
         fn add_assign(&mut self, rhs: Card) {
             self.value += rhs.value();
-            if self.cards.len() != 1 {
-                // Announce the card if it is not the dealer's second card
-                print!("The dealer draws {}. ", rhs);
-                match self.value.total {
-                    22.. => println!("The dealer busts!"),
-                    total => println!("The dealer has {}.", total),
-                }
-            } else {
+            if self.cards.len() == 1 {
                 // The hole card is kept secret until later
                 println!("The dealer draws a card.");
+            } else {
+                // Announce the card if it is not the dealer's second card
+                print!("The dealer draws {rhs}. ");
+                match self.value.total {
+                    22.. => println!("The dealer busts!"),
+                    total => println!("The dealer has {total}."),
+                }
             }
             self.cards.push(rhs);
             self.status = match (self.value.soft, self.value.total) {
-                (_, 22..) => HandStatus::Bust,
-                (_, 21) if self.cards.len() == 2 => HandStatus::Blackjack,
-                (true, 17) if self.soft_17_hit => HandStatus::InPlay,
-                (_, 17..) => HandStatus::Stood,
-                _ => HandStatus::InPlay,
+                (_, 22..) => Status::Bust,
+                (_, 21) if self.cards.len() == 2 => Status::Blackjack,
+                (true, 17) if self.soft_17_hit => Status::InPlay,
+                (_, 17..) => Status::Stood,
+                _ => Status::InPlay,
             };
         }
     }
@@ -245,9 +242,9 @@ pub mod hand {
         /// The cards in this hand
         pub cards: Vec<Card>,
         /// The value of this hand
-        pub value: HandValue,
+        pub value: Value,
         /// The status of this hand
-        pub status: HandStatus,
+        pub status: Status,
         /// Whether this hand was split from another hand (important for doubling down)
         pub splits: u8,
         /// The player's bet on this hand
@@ -267,7 +264,7 @@ pub mod hand {
 
         /// The player stands on this hand.
         pub fn stand(&mut self) {
-            self.status = HandStatus::Stood;
+            self.status = Status::Stood;
         }
 
         /// The player doubles down on this hand.
@@ -277,9 +274,9 @@ pub mod hand {
             self.bet *= 2;
             *self += card;
             self.status = match self.value.total {
-                22.. => HandStatus::Bust,
-                21 => HandStatus::Blackjack,
-                _ => HandStatus::Stood,
+                22.. => Status::Bust,
+                21 => Status::Blackjack,
+                _ => Status::Stood,
             };
         }
 
@@ -299,7 +296,7 @@ pub mod hand {
 
         /// The player surrenders this hand.
         pub fn surrender(&mut self) {
-            self.status = HandStatus::Surrendered;
+            self.status = Status::Surrendered;
         }
 
         /// Returns whether this hand is a pair.
@@ -320,17 +317,16 @@ pub mod hand {
         /// This method should only be called once the dealer's hand is in a terminal state.
         pub fn calculate_winnings(&mut self, dealer_hand: &DealerHand, six_to_five: bool) {
             self.winnings = match (&self.status, &dealer_hand.status) {
-                (HandStatus::Surrendered, _) => self.surrender_payout(),
-                (HandStatus::Blackjack, HandStatus::Blackjack) => self.bet,
-                (HandStatus::Blackjack, _) => self.blackjack_payout(six_to_five),
-                (_, HandStatus::Blackjack) => 0,
-                (HandStatus::Bust, _) => 0,
-                (_, HandStatus::Bust) => self.win_payout(),
+                (Status::Surrendered, _) => self.surrender_payout(), // Surrender
+                (Status::Blackjack, Status::Blackjack) => self.bet, // Blackjack push
+                (Status::Blackjack, _) => self.blackjack_payout(six_to_five), // Blackjack win
+                (_, Status::Blackjack) | (Status::Bust, _) => 0, // Dealer blackjack or player bust
+                (_, Status::Bust) => self.win_payout(), // Dealer bust
                 _ => {
                     match self.value.total.cmp(&dealer_hand.value.total) {
-                        Ordering::Less => 0,
-                        Ordering::Equal => self.bet,
-                        Ordering::Greater => self.win_payout(),
+                        Ordering::Greater => self.win_payout(), // Player win
+                        Ordering::Equal => self.bet, // Push
+                        Ordering::Less => 0, // Dealer win
                     }
                 }
             }
@@ -338,10 +334,7 @@ pub mod hand {
 
         /// Calculates the winnings for a blackjack win based on whether the game pays 3:2 or 6:5.
         fn blackjack_payout(&self, six_to_five: bool) -> u32 {
-            match six_to_five {
-                false => self.bet + self.bet * 3 / 2, // 1.5x win
-                true => self.bet + self.bet * 6 / 5,  // 1.2x win
-            }
+            if six_to_five { self.bet + self.bet * 6 / 5 } else { self.bet + self.bet * 3 / 2 }
         }
 
         /// Calculates the winnings for a normal win.
@@ -358,25 +351,25 @@ pub mod hand {
     impl AddAssign<Card> for PlayerHand {
         /// Adds a card to the player's hand, updating the value and announcing the card.
         fn add_assign(&mut self, rhs: Card) {
-            print!("You draw {}. ", rhs);
+            print!("You draw {rhs}. ");
             self.value += rhs.value();
             self.cards.push(rhs);
             self.status = match self.value.total {
                 22.. => {
                     println!("You bust!");
-                    HandStatus::Bust
+                    Status::Bust
                 },
                 21 if self.cards.len() == 2 => {
                     println!("Blackjack!");
-                    HandStatus::Blackjack
+                    Status::Blackjack
                 },
                 21 => {
                     println!("You have 21.");
-                    HandStatus::Stood
+                    Status::Stood
                 },
                 total => {
-                    println!("You have {}.", total);
-                    HandStatus::InPlay
+                    println!("You have {total}.");
+                    Status::InPlay
                 },
             }
         }
@@ -415,7 +408,7 @@ pub mod dispenser {
     impl Shoe {
         /// Create a new shoe with the given number of decks
         pub fn new(decks: u8, shuffle_threshold: f32) -> Self {
-            let remaining = [decks as u16; 52]; // Start with all cards present
+            let remaining = [u16::from(decks); 52]; // Start with all cards present
             let dist = WeightedIndex::new(remaining).unwrap();
             Shoe { decks, dist, remaining, shuffle_threshold }
         }
@@ -438,15 +431,15 @@ pub mod dispenser {
 
         /// Shuffles the shoe if we have reached the configured shoe penetration.
         pub fn needs_shuffle(&mut self) -> bool {
-            let shoe_size = self.decks as u16 * 52;
+            let shoe_size = u16::from(self.decks) * 52;
             let cards_played = shoe_size - self.remaining.iter().sum::<u16>();
-            let penetration = cards_played as f32 / shoe_size as f32;
+            let penetration = f32::from(cards_played) / f32::from(shoe_size);
             penetration >= self.shuffle_threshold
         }
 
         /// Shuffles the shoe.
         pub fn shuffle(&mut self) {
-            self.remaining = [self.decks as u16; 52];
+            self.remaining = [u16::from(self.decks); 52];
             self.dist = WeightedIndex::new(self.remaining).unwrap();
         }
     }

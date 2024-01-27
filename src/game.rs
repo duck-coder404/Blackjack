@@ -1,5 +1,5 @@
 use crate::card::dispenser::Shoe;
-use crate::card::hand::{PlayerHand, DealerHand, HandStatus};
+use crate::card::hand::{PlayerHand, DealerHand, Status};
 use crate::Configuration;
 use crate::statistics::Statistics;
 use crate::input::{Player, GameAction, HandAction};
@@ -34,7 +34,7 @@ pub struct EndTurn {
 }
 
 impl Game {
-    pub fn new(config: Configuration) -> Self {
+    pub fn new(config: &Configuration) -> Self {
         Self {
             dispenser: Shoe::new(config.decks, config.penetration),
             soft_17_hit: config.soft_17_hit,
@@ -59,7 +59,7 @@ impl Game {
             player.wait();
             let turn = self.start_turn(player, bet);
             let mut turn = self.play_hands(player, turn);
-            self.payout(player, &mut turn);
+            Self::payout(player, &mut turn);
             if player.chips < self.min_bet.unwrap_or(1) {
                 println!("You don't have enough chips to continue!");
                 break;
@@ -70,7 +70,7 @@ impl Game {
         }
         println!("You finished with {} chips.", player.chips);
         println!("Goodbye!");
-        println!("Game statistics: {}", stats);
+        println!("Game statistics: {stats}");
         player.wait();
     }
 
@@ -110,7 +110,7 @@ impl Game {
     fn play_hands(&mut self, player: &mut Player, mut turn: StartTurn) -> EndTurn {
         // The player may now play their hand, which may turn into multiple hands through splitting
         // (skip if dealer has blackjack)
-        let mut player_hands = if turn.dealer_hand.status == HandStatus::Blackjack {
+        let mut player_hands = if turn.dealer_hand.status == Status::Blackjack {
             vec![turn.player_hand]
         } else {
             self.play_player_hand(player, turn.player_hand, &turn.dealer_hand)
@@ -119,9 +119,9 @@ impl Game {
         turn.dealer_hand.reveal_hole_card();
         player.wait();
         // The dealer plays their hand
-        if player_hands.iter().any(|hand| hand.status == HandStatus::Stood) {
+        if player_hands.iter().any(|hand| hand.status == Status::Stood) {
             // At least one hand was played and stood on, so the dealer must finish their hand
-            self.play_dealer_hand(player, &mut turn.dealer_hand)
+            self.play_dealer_hand(player, &mut turn.dealer_hand);
         }
         player_hands.iter_mut().for_each(|hand| hand.calculate_winnings(&turn.dealer_hand, self.six_to_five));
         let total_bet = player_hands.iter().map(|hand| hand.bet).sum();
@@ -137,7 +137,7 @@ impl Game {
 
     fn play_player_hand(&mut self, player: &mut Player, player_hand: PlayerHand, dealer_hand: &DealerHand) -> Vec<PlayerHand> {
         let mut player_hands = vec![player_hand];
-        while let Some(player_hand) = player_hands.iter_mut().find(|hand| hand.status == HandStatus::InPlay) {
+        while let Some(player_hand) = player_hands.iter_mut().find(|hand| hand.status == Status::InPlay) {
             println!(
                 "{} against {}.",
                 player_hand.value,
@@ -188,20 +188,20 @@ impl Game {
 
     fn play_dealer_hand(&mut self, player: &Player, dealer_hand: &mut DealerHand) {
         // At least one hand was played and stood on, so the dealer must finish their hand
-        while dealer_hand.status == HandStatus::InPlay {
+        while dealer_hand.status == Status::InPlay {
             *dealer_hand += self.dispenser.draw_card();
             player.wait();
         }
     }
 
-    fn payout(&mut self, player: &mut Player, turn: &mut EndTurn) {
-        if turn.insurance > 0 && turn.dealer_hand.status == HandStatus::Blackjack {
+    fn payout(player: &mut Player, turn: &mut EndTurn) {
+        if turn.insurance > 0 && turn.dealer_hand.status == Status::Blackjack {
             turn.winnings += turn.insurance * 2;
         }
 
         match turn.winnings {
             0 => println!("You lose!"),
-            chips if chips < turn.total_bet => println!("You make back {} chips!", chips),
+            chips if chips < turn.total_bet => println!("You make back {chips} chips!"),
             chips if chips == turn.total_bet => println!("You push!"),
             chips => println!("You win {chips} chips!"),
         }

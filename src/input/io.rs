@@ -10,7 +10,7 @@ pub struct IO;
 
 impl Strategy for IO {
     fn place_bet_or_quit(&mut self, game: &Game, chips: u32) -> GameAction {
-        println!("You have {} chips. How many chips would you like to bet? Type \"stop\" to quit.", chips);
+        println!("You have {chips} chips. How many chips would you like to bet? Type \"stop\" to quit.");
         let mut input = String::new();
         loop {
             io::stdin()
@@ -24,11 +24,11 @@ impl Strategy for IO {
                 Ok(0) => println!("You must bet at least 1 chip!"),
                 Ok(bet) if bet > chips => println!("You don't have enough chips!"),
                 Ok(bet) => match (game.max_bet, game.min_bet) {
-                    (Some(max), _) if bet > max => println!("You cannot bet more than {} chips!", max),
-                    (_, Some(min)) if bet < min => println!("You cannot bet fewer than {} chips!", min),
+                    (Some(max), _) if bet > max => println!("You cannot bet more than {max} chips!"),
+                    (_, Some(min)) if bet < min => println!("You cannot bet fewer than {min} chips!"),
                     _ => return GameAction::Bet(bet),
                 },
-                Err(_) => println!("\"{}\" is not a number!", trimmed),
+                Err(_) => println!("Please enter a number!"),
             }
             input.clear();
         }
@@ -50,7 +50,7 @@ impl Strategy for IO {
         let two_cards = is_pair || player_hand.cards.len() == 2;
         let can_double_bet = chips >= player_hand.bet;
         let can_double_after_split = player_hand.splits == 0 || game.double_after_split;
-        let can_split_again = game.max_splits.map(|max| player_hand.splits < max).unwrap_or(true);
+        let can_split_again = game.max_splits.map_or(true, |max| player_hand.splits < max);
         let can_split_aces = game.split_aces || !is_pair || !player_hand.value.soft;
         let can_surrender = game.late_surrender;
         get_hand_action(
@@ -64,7 +64,7 @@ impl Strategy for IO {
         )
     }
 
-    fn sleep(&self) {
+    fn wait(&self) {
         thread::sleep(Duration::from_secs(1));
     }
 }
@@ -77,10 +77,8 @@ fn surrender_early() -> bool {
             .read_line(&mut input)
             .expect("Failed to read input");
         match input.trim() {
-            "y" => return true,
-            "yes" => return true,
-            "n" => return false,
-            "no" => return false,
+            "y" | "yes" => return true,
+            "n" | "no" => return false,
             _ => println!("Please enter y or n!"),
         }
         input.clear();
@@ -98,7 +96,7 @@ fn offer_insurance(max_bet: u32) -> u32 {
             Ok(0) => return 0,
             Ok(bet) if bet > max_bet => println!("You cannot bet more than half your original bet!"),
             Ok(bet) => {
-                println!("You place an insurance bet of {} chips.", bet);
+                println!("You place an insurance bet of {bet} chips.");
                 return bet;
             },
             Err(_) => println!("Please enter a number!"),
@@ -180,16 +178,11 @@ impl FromStr for HandAction {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "s" => Ok(HandAction::Stand),
-            "stand" => Ok(HandAction::Stand),
-            "h" => Ok(HandAction::Hit),
-            "hit" => Ok(HandAction::Hit),
-            "d" => Ok(HandAction::Double),
-            "double" => Ok(HandAction::Double),
-            "p" => Ok(HandAction::Split),
-            "split" => Ok(HandAction::Split),
-            "u" => Ok(HandAction::Surrender),
-            "surrender" => Ok(HandAction::Surrender),
+            "s" | "stand" => Ok(HandAction::Stand),
+            "h" | "hit" => Ok(HandAction::Hit),
+            "d" | "double" => Ok(HandAction::Double),
+            "p" | "split" => Ok(HandAction::Split),
+            "u" | "surrender" => Ok(HandAction::Surrender),
             _ => Err(()),
         }
     }

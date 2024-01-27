@@ -18,12 +18,9 @@ impl BasicStrategy {
 
 impl Strategy for BasicStrategy {
     fn place_bet_or_quit(&mut self, _: &Game, _: u32) -> GameAction {
-        match self.turns {
-            0 => GameAction::Quit,
-            _ => {
-                self.turns -= 1;
-                GameAction::Bet(self.flat_bet)
-            }
+        if self.turns == 0 { GameAction::Quit } else {
+            self.turns -= 1;
+            GameAction::Bet(self.flat_bet)
         }
     }
 
@@ -56,21 +53,21 @@ impl Strategy for BasicStrategy {
 
 }
 
-/// Source: https://wizardofodds.com/games/blackjack/surrender/
+/// Source: <https://wizardofodds.com/games/blackjack/surrender/>
 fn surrender_early_hard(game: &Game, player_hand: &PlayerHand, dealer_hand: &DealerHand) -> bool {
     match (player_hand.value.total, dealer_hand.showing()) {
         (14, 10) if game.dispenser.decks <= 2 && player_hand.composed_of(10, 4) => false,
         (14, 10) if game.dispenser.decks == 1 && player_hand.composed_of(5, 9) => false,
-        (5..=7, 11) | (12..=17, 11) | (14..=16, 10) => true,
+        (5..=7 | 12..=17, 11) | (14..=16, 10) => true,
         _ => false
     }
 }
 
-/// Source: https://wizardofodds.com/games/blackjack/surrender/
+/// Source: <https://wizardofodds.com/games/blackjack/surrender/>
 fn surrender_early_pair(game: &Game, player_hand: &PlayerHand, dealer_hand: &DealerHand) -> bool {
     match (player_hand.cards[0].value().total, dealer_hand.showing()) {
         (8, 10) if game.dispenser.decks == 1 && game.double_after_split => false,
-        (7..=8, 10) | (3, 11) | (6..=8, 11) => true,
+        (7..=8, 10) | (3 | 6..=8, 11) => true,
         (2, 11) if game.soft_17_hit => true,
         _ => false
     }

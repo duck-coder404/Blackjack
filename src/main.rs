@@ -59,30 +59,25 @@ pub struct Configuration {
 fn parse_float_between_0_and_1(s: &str) -> Result<f32, String> {
     let f = s
         .parse::<f32>()
-        .map_err(|_| format!("{} is not a valid float", s))?;
+        .map_err(|_| format!("{s} is not a valid float"))?;
     if (0.0..=1.0).contains(&f) {
         Ok(f)
     } else {
-        Err(format!("{} is not between 0 and 1", f))
+        Err(format!("{f} is not between 0 and 1"))
     }
 }
 
 fn main() {
     let config = Configuration::parse();
-    println!("Using {:#?}\n", config);
-    let chips = config.chips;
-    let min_bet = config.min_bet;
-    if chips < min_bet.unwrap_or(1) {
-        panic!("You don't have enough chips to play!");
-    }
+    println!("Using {config:#?}\n");
+    assert!(config.chips >= config.min_bet.unwrap_or(1), "You don't have enough chips to play!");
     if let (Some(max), Some(min)) = (config.max_bet, config.min_bet) {
-        if max < min {
-            panic!("Max bet cannot be less than min bet!");
-        }
+        assert!(max >= min, "Max bet cannot be less than min bet!");
     }
+
     let mut player = match config.simulate {
-        Some(turns) => Player::new(chips, BasicStrategy::new(turns, min_bet.unwrap_or(chips / 100))),
-        None => Player::new(chips, IO),
+        Some(turns) => Player::new(config.chips, BasicStrategy::new(turns, config.min_bet.unwrap_or(config.chips / 100))),
+        None => Player::new(config.chips, IO),
     };
-    Game::new(config).play(&mut player);
+    Game::new(&config).play(&mut player);
 }
