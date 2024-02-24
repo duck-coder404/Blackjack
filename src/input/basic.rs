@@ -37,17 +37,18 @@ impl Strategy for BasicStrategy {
     }
 
     fn get_hand_action(&self, game: &Game, player_hand: &PlayerHand, dealer_hand: &DealerHand, chips: u32) -> HandAction {
-        let can_double_bet = chips >= player_hand.bet;
-        let two_cards = player_hand.cards.len() == 2;
-        let can_double_after_split = player_hand.splits == 0 || game.double_after_split;
-        match (player_hand.value.soft, player_hand.is_pair()) {
+        let preferred = match (player_hand.value.soft, player_hand.is_pair()) {
             (false, false) => make_move_hard(game, player_hand, dealer_hand),
             (true, false) => make_move_soft(game, player_hand, dealer_hand),
             (_, true) => make_move_pair(game, player_hand, dealer_hand),
-        }.resolve(
-            can_double_bet && two_cards && can_double_after_split,
+        };
+        let can_double_chips = chips >= player_hand.bet;
+        let two_cards = player_hand.cards.len() == 2;
+        let can_double_after_split = player_hand.splits == 0 || game.double_after_split;
+        preferred.resolve(
+            can_double_chips && two_cards && can_double_after_split,
             game.late_surrender,
-            game.double_after_split && can_double_bet
+            game.double_after_split && can_double_chips,
         )
     }
 
@@ -86,7 +87,7 @@ enum PreferredAction {
 
 impl PreferredAction {
     /// Converts the preferred action to an action given the current game situation
-    pub fn resolve(self, can_double: bool, can_surrender: bool, can_double_after_split: bool) -> HandAction {
+    pub fn resolve(self, can_double: bool, can_surrender: bool, can_split: bool) -> HandAction {
         match self {
             PreferredAction::Stand => HandAction::Stand,
             PreferredAction::Hit => HandAction::Hit,
@@ -94,7 +95,7 @@ impl PreferredAction {
             PreferredAction::DoubleOrHit => if can_double { HandAction::Double } else { HandAction::Hit },
             PreferredAction::DoubleOrStand => if can_double { HandAction::Double } else { HandAction::Stand },
             PreferredAction::SurrenderOrHit => if can_surrender { HandAction::Surrender } else { HandAction::Hit },
-            PreferredAction::SplitOrHit => if can_double_after_split { HandAction::Split } else { HandAction::Hit },
+            PreferredAction::SplitOrHit => if can_split { HandAction::Split } else { HandAction::Hit },
         }
     }
 }
@@ -141,8 +142,7 @@ fn make_move_pair(_: &Game, player_hand: &PlayerHand, dealer_hand: &DealerHand) 
         (6, 3..=6) => PreferredAction::Split,
         (7, 2..=7) => PreferredAction::Split,
         (2..=7, 2..=11) => PreferredAction::Hit,
-        (9, 7) | (9, 10..=11) => PreferredAction::Stand,
-        (10, 2..=11) => PreferredAction::Stand,
+        (9, 7 | 10..=11) | (10, 2..=11) => PreferredAction::Stand,
         (8..=11, 2..=11) => PreferredAction::Split,
         (_, showing) => panic!("Invalid hand value: {} against {}", player_hand.value, showing),
     }
