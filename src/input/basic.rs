@@ -1,57 +1,24 @@
 use crate::card::hand::{DealerHand, PlayerHand};
 use crate::game::Game;
-use crate::input::{HandAction, GameAction, Strategy};
+use crate::input::{HandAction, GameAction};
 
-pub struct BasicStrategy {
-    turns: u32,
-    flat_bet: u32,
-}
-
-impl BasicStrategy {
-    pub fn new(turns: u32, flat_bet: u32) -> Self {
-        Self {
-            turns,
-            flat_bet,
-        }
+pub fn place_bet_or_quit(_: &Game, _: u32, turns: &mut u32, flat_bet: u32) -> GameAction {
+    if *turns == 0 { GameAction::Quit } else {
+        *turns -= 1;
+        GameAction::Bet(flat_bet)
     }
 }
 
-impl Strategy for BasicStrategy {
-    fn place_bet_or_quit(&mut self, _: &Game, _: u32) -> GameAction {
-        if self.turns == 0 { GameAction::Quit } else {
-            self.turns -= 1;
-            GameAction::Bet(self.flat_bet)
-        }
+pub fn surrender_early(game: &Game, player_hand: &PlayerHand, dealer_hand: &DealerHand) -> bool {
+    match (player_hand.value.soft, player_hand.is_pair()) {
+        (false, false) => surrender_early_hard(game, player_hand, dealer_hand),
+        (true, false) => false,
+        (_, true) => surrender_early_pair(game, player_hand, dealer_hand),
     }
+}
 
-    fn surrender_early(&self, game: &Game, player_hand: &PlayerHand, dealer_hand: &DealerHand) -> bool {
-        match (player_hand.value.soft, player_hand.is_pair()) {
-            (false, false) => surrender_early_hard(game, player_hand, dealer_hand),
-            (true, false) => false,
-            (_, true) => surrender_early_pair(game, player_hand, dealer_hand),
-        }
-    }
-
-    fn offer_insurance(&self, _: u32) -> u32 {
-        0
-    }
-
-    fn get_hand_action(&self, game: &Game, player_hand: &PlayerHand, dealer_hand: &DealerHand, chips: u32) -> HandAction {
-        let preferred = match (player_hand.value.soft, player_hand.is_pair()) {
-            (false, false) => make_move_hard(game, player_hand, dealer_hand),
-            (true, false) => make_move_soft(game, player_hand, dealer_hand),
-            (_, true) => make_move_pair(game, player_hand, dealer_hand),
-        };
-        let can_double_chips = chips >= player_hand.bet;
-        let two_cards = player_hand.cards.len() == 2;
-        let can_double_after_split = player_hand.splits == 0 || game.double_after_split;
-        preferred.resolve(
-            can_double_chips && two_cards && can_double_after_split,
-            game.late_surrender,
-            game.double_after_split && can_double_chips,
-        )
-    }
-
+pub fn offer_insurance(_: u32) -> u32 {
+    0
 }
 
 /// Source: <https://wizardofodds.com/games/blackjack/surrender/>
@@ -72,6 +39,22 @@ fn surrender_early_pair(game: &Game, player_hand: &PlayerHand, dealer_hand: &Dea
         (2, 11) if game.soft_17_hit => true,
         _ => false
     }
+}
+
+pub fn get_hand_action(game: &Game, player_hand: &PlayerHand, dealer_hand: &DealerHand, chips: u32) -> HandAction {
+    let preferred = match (player_hand.value.soft, player_hand.is_pair()) {
+        (false, false) => make_move_hard(game, player_hand, dealer_hand),
+        (true, false) => make_move_soft(game, player_hand, dealer_hand),
+        (_, true) => make_move_pair(game, player_hand, dealer_hand),
+    };
+    let can_double_chips = chips >= player_hand.bet;
+    let two_cards = player_hand.cards.len() == 2;
+    let can_double_after_split = player_hand.splits == 0 || game.double_after_split;
+    preferred.resolve(
+        can_double_chips && two_cards && can_double_after_split,
+        game.late_surrender,
+        game.double_after_split && can_double_chips,
+    )
 }
 
 /// The preferred action which may involve a fallback action

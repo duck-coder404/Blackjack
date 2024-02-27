@@ -1,75 +1,36 @@
 use std::fmt::{Display, Formatter};
-use std::{fmt, io, thread};
+use std::{fmt, io};
 use std::str::FromStr;
-use std::time::Duration;
 use crate::card::hand::{DealerHand, PlayerHand};
 use crate::game::Game;
-use crate::input::{HandAction, GameAction, Strategy};
+use crate::input::{HandAction, GameAction};
 
-pub struct IO;
-
-impl Strategy for IO {
-    fn place_bet_or_quit(&mut self, game: &Game, chips: u32) -> GameAction {
-        println!("You have {chips} chips. How many chips would you like to bet? Type \"stop\" to quit.");
-        let mut input = String::new();
-        loop {
-            io::stdin()
-                .read_line(&mut input)
-                .expect("Failed to read input");
-            let trimmed = input.trim();
-            if trimmed == "stop" {
-                return GameAction::Quit;
-            }
-            match trimmed.parse() {
-                Ok(0) => println!("You must bet at least 1 chip!"),
-                Ok(bet) if bet > chips => println!("You don't have enough chips!"),
-                Ok(bet) => match (game.max_bet, game.min_bet) {
-                    (Some(max), _) if bet > max => println!("You cannot bet more than {max} chips!"),
-                    (_, Some(min)) if bet < min => println!("You cannot bet fewer than {min} chips!"),
-                    _ => return GameAction::Bet(bet),
-                },
-                Err(_) => println!("Please enter a number!"),
-            }
-            input.clear();
+pub fn place_bet_or_quit(game: &Game, chips: u32) -> GameAction {
+    println!("You have {chips} chips. How many chips would you like to bet? Type \"stop\" to quit.");
+    let mut input = String::new();
+    loop {
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read input");
+        let trimmed = input.trim();
+        if trimmed == "stop" {
+            return GameAction::Quit;
         }
-    }
-
-    fn surrender_early(&self, _: &Game, _: &PlayerHand, _: &DealerHand) -> bool {
-        surrender_early()
-    }
-
-    fn offer_insurance(&self, max_bet: u32) -> u32 {
-        offer_insurance(max_bet)
-    }
-
-    /// Prompts the player to make a move
-    /// Which actions are available depends on the number of cards in the hand,
-    /// whether the hand is a pair, and whether the player has enough chips to double their bet
-    fn get_hand_action(&self, game: &Game, player_hand: &PlayerHand, _: &DealerHand, chips: u32) -> HandAction {
-        let is_pair = player_hand.is_pair();
-        let two_cards = is_pair || player_hand.cards.len() == 2;
-        let can_double_bet = chips >= player_hand.bet;
-        let can_double_after_split = player_hand.splits == 0 || game.double_after_split;
-        let can_split_again = game.max_splits.map_or(true, |max| player_hand.splits < max);
-        let can_split_aces = game.split_aces || !is_pair || !player_hand.value.soft;
-        let can_surrender = game.late_surrender;
-        get_hand_action(
-            is_pair,
-            two_cards,
-            can_double_bet,
-            can_double_after_split,
-            can_split_again,
-            can_split_aces,
-            can_surrender
-        )
-    }
-
-    fn wait(&self) {
-        thread::sleep(Duration::from_secs(1));
+        match trimmed.parse() {
+            Ok(0) => println!("You must bet at least 1 chip!"),
+            Ok(bet) if bet > chips => println!("You don't have enough chips!"),
+            Ok(bet) => match (game.max_bet, game.min_bet) {
+                (Some(max), _) if bet > max => println!("You cannot bet more than {max} chips!"),
+                (_, Some(min)) if bet < min => println!("You cannot bet fewer than {min} chips!"),
+                _ => return GameAction::Bet(bet),
+            },
+            Err(_) => println!("Please enter a number!"),
+        }
+        input.clear();
     }
 }
 
-fn surrender_early() -> bool {
+pub fn surrender_early(_: &Game, _: &PlayerHand, _: &DealerHand) -> bool {
     println!("Would you like to surrender before the dealer checks for blackjack? (y/n)");
     let mut input = String::new();
     loop {
@@ -85,7 +46,7 @@ fn surrender_early() -> bool {
     }
 }
 
-fn offer_insurance(max_bet: u32) -> u32 {
+pub fn offer_insurance(max_bet: u32) -> u32 {
     println!("Would you like to place an insurance bet? Enter your bet or 0 to decline.");
     let mut input = String::new();
     loop {
@@ -105,15 +66,17 @@ fn offer_insurance(max_bet: u32) -> u32 {
     }
 }
 
-fn get_hand_action(
-    is_pair: bool,
-    two_cards: bool,
-    can_double_bet: bool,
-    can_double_after_split: bool,
-    can_split_again: bool,
-    can_split_aces: bool,
-    can_surrender: bool
-) -> HandAction {
+/// Prompts the player to make a move
+/// Which actions are available depends on the number of cards in the hand,
+/// whether the hand is a pair, and whether the player has enough chips to double their bet
+pub fn get_hand_action(game: &Game, player_hand: &PlayerHand, _: &DealerHand, chips: u32) -> HandAction {
+    let is_pair = player_hand.is_pair();
+    let two_cards = is_pair || player_hand.cards.len() == 2;
+    let can_double_bet = chips >= player_hand.bet;
+    let can_double_after_split = player_hand.splits == 0 || game.double_after_split;
+    let can_split_again = game.max_splits.map_or(true, |max| player_hand.splits < max);
+    let can_split_aces = game.split_aces || !is_pair || !player_hand.value.soft;
+    let can_surrender = game.late_surrender;
     let mut allowed_moves = Vec::with_capacity(5);
     allowed_moves.push(HandAction::Hit);
     allowed_moves.push(HandAction::Stand);

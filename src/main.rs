@@ -1,8 +1,7 @@
 use clap::Parser;
 use crate::game::Game;
-use crate::input::basic::BasicStrategy;
-use crate::input::io::IO;
-use crate::input::Player;
+
+use crate::input::{Input, Player};
 
 mod card;
 mod game;
@@ -13,7 +12,7 @@ mod statistics;
 #[command(author, about, version)]
 pub struct Configuration {
     /// Number of decks to use.
-    #[arg(short, long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=255))]
+    #[arg(short, long, default_value_t = 1, value_parser = clap::value_parser ! (u8).range(1..=255))]
     pub decks: u8,
     /// Proportion of the shoe to play before reshuffling.
     #[arg(short, long, default_value_t = 0.0, value_parser = parse_float_between_0_and_1)]
@@ -57,27 +56,32 @@ pub struct Configuration {
 }
 
 fn parse_float_between_0_and_1(s: &str) -> Result<f32, String> {
-    let f = s
-        .parse::<f32>()
-        .map_err(|_| format!("{s} is not a valid float"))?;
-    if (0.0..=1.0).contains(&f) {
-        Ok(f)
-    } else {
-        Err(format!("{f} is not between 0 and 1"))
+    match s.parse() {
+        Ok(f) if (0.0..=1.0).contains(&f) => Ok(f),
+        _ => Err(format!("{s} is not a valid float between 0 and 1")),
     }
 }
 
 fn main() {
     let config = Configuration::parse();
     println!("Using {config:#?}\n");
-    assert!(config.chips >= config.min_bet.unwrap_or(1), "You don't have enough chips to play!");
+    assert!(
+        config.chips >= config.min_bet.unwrap_or(1),
+        "You don't have enough chips to play!"
+    );
     if let (Some(max), Some(min)) = (config.max_bet, config.min_bet) {
         assert!(max >= min, "Max bet cannot be less than min bet!");
     }
 
     let mut player = match config.simulate {
-        Some(turns) => Player::new(config.chips, BasicStrategy::new(turns, config.min_bet.unwrap_or(config.chips / 100))),
-        None => Player::new(config.chips, IO),
+        Some(turns) => Player::new(
+            config.chips,
+            Input::Basic {
+                turns,
+                flat_bet: config.min_bet.unwrap_or(config.chips / 100),
+            },
+        ),
+        None => Player::new(config.chips, Input::CLI),
     };
     Game::new(&config).play(&mut player);
 }

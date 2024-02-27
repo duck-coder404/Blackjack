@@ -1,8 +1,8 @@
 use crate::card::dispenser::Shoe;
-use crate::card::hand::{PlayerHand, DealerHand, Status};
+use crate::card::hand::{DealerHand, PlayerHand, Status};
 use crate::Configuration;
+use crate::input::{GameAction, HandAction, Player};
 use crate::statistics::Statistics;
-use crate::input::{Player, GameAction, HandAction};
 
 pub struct Game {
     pub dispenser: Shoe,
@@ -51,10 +51,11 @@ impl Game {
         }
     }
 
-    pub fn play(mut self, player: &mut Player) {
+    pub fn play(&mut self, player: &mut Player) {
         println!("Welcome to Blackjack!");
         let mut stats = Statistics::new();
         while let GameAction::Bet(bet) = player.place_bet_or_quit(&self) {
+            player.chips -= bet;
             println!("You bet {} chips. You have {} chips remaining.", bet, player.chips);
             player.wait();
             let turn = self.start_turn(player, bet);
@@ -103,7 +104,7 @@ impl Game {
         StartTurn {
             player_hand,
             dealer_hand,
-            insurance
+            insurance,
         }
     }
 
@@ -217,5 +218,4 @@ impl Game {
             player.wait();
         }
     }
-
 }

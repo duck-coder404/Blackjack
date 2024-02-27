@@ -217,7 +217,7 @@ pub mod hand {
             self.cards.push(rhs);
             self.status = match (self.value.soft, self.value.total) {
                 (_, 22..) => Status::Bust,
-                (_, 21) if self.cards.len() == 2 => Status::Blackjack,
+                (true, 21) if self.cards.len() == 2 => Status::Blackjack,
                 (true, 17) if self.soft_17_hit => Status::InPlay,
                 (_, 17..) => Status::Stood,
                 _ => Status::InPlay,
@@ -273,11 +273,9 @@ pub mod hand {
         pub fn double(&mut self, card: Card) {
             self.bet *= 2;
             *self += card;
-            self.status = match self.value.total {
-                22.. => Status::Bust,
-                21 => Status::Blackjack,
-                _ => Status::Stood,
-            };
+            if let Status::InPlay = self.status {
+                self.status = Status::Stood;
+            }
         }
 
         /// The player splits the hand into two hands. This hand must be a pair!
@@ -429,7 +427,7 @@ pub mod dispenser {
             Card::from_ordinal(ordinal)
         }
 
-        /// Shuffles the shoe if we have reached the configured shoe penetration.
+        /// Checks if the shoe needs to be shuffled.
         pub fn needs_shuffle(&mut self) -> bool {
             let shoe_size = u16::from(self.decks) * 52;
             let cards_played = shoe_size - self.remaining.iter().sum::<u16>();
