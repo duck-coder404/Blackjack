@@ -1,12 +1,11 @@
 use clap::Parser;
-use crate::game::Game;
+use blackjack_core::card::shoe::Shoe;
+use blackjack_core::blackjack::Table;
+use blackjack_core::rules::Rules;
+use blackjack_core::state::GameState;
+use crate::app::CliGame;
 
-use crate::input::{Input, Player};
-
-mod card;
-mod game;
-mod input;
-mod statistics;
+mod app;
 
 #[derive(Debug, Parser)]
 #[command(author, about, version)]
@@ -17,12 +16,12 @@ pub struct Configuration {
     /// Proportion of the shoe to play before reshuffling.
     #[arg(short, long, default_value_t = 0.0, value_parser = parse_float_between_0_and_1)]
     pub penetration: f32,
-    /// Whether the dealer should hit on soft 17s.
-    #[arg(long, default_value_t = false)]
-    pub soft_17_hit: bool,
-    /// Whether blackjack pays 6:5 instead of 3:2.
-    #[arg(long, default_value_t = false)]
-    pub six_to_five: bool,
+    // /// Whether the dealer should stand or hit on soft 17s.
+    // #[arg(long, default_value = DealerSoft17Action::Stand)]
+    // pub dealer_soft_17: DealerSoft17Action,
+    // /// Whether blackjack should pay 3:2 or 6:5.
+    // #[arg(long, default_value = BlackjackPayout::ThreeToTwo)]
+    // pub blackjack_payout: BlackjackPayout,
     /// Whether to allow early surrendering.
     #[arg(long, short, default_value_t = false)]
     pub early_surrender: bool,
@@ -73,15 +72,9 @@ fn main() {
         assert!(max >= min, "Max bet cannot be less than min bet!");
     }
 
-    let mut player = match config.simulate {
-        Some(turns) => Player::new(
-            config.chips,
-            Input::Basic {
-                turns,
-                flat_bet: config.min_bet.unwrap_or(config.chips / 100),
-            },
-        ),
-        None => Player::new(config.chips, Input::CLI),
+    let game = CliGame {
+        table: Table::new(1000, Shoe::new(4, 0.5), Rules::default()),
+        state: GameState::Betting,
     };
-    Game::new(&config).play(&mut player);
+    game.play();
 }

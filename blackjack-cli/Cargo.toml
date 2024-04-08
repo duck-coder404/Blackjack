@@ -1,0 +1,9 @@
+[package]
+name = "blackjack-cli"
+version = "0.2.0"
+description = "A simple command-line Blackjack game written in Rust."
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.1", features = ["derive"] }
+blackjack-core = { path = "../blackjack-core" }

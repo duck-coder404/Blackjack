@@ -1,12 +1,13 @@
+use std::cmp::Ordering;
 use std::fmt::Display;
-use crate::card::hand::Status;
-use crate::game::EndTurn;
+use crate::card::hand::{DealerHand, PlayerHand, Status};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Statistics {
     turns_played: usize,
     hands_played: usize,
     total_bet: usize,
+    total_won: usize,
     wins: usize,
     pushes: usize,
     losses: usize,
@@ -17,14 +18,16 @@ pub struct Statistics {
 }
 
 impl Statistics {
-    pub fn new() -> Statistics {
-        Statistics {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
             turns_played: 0,
             hands_played: 0,
+            total_bet: 0,
+            total_won: 0,
             wins: 0,
             pushes: 0,
             losses: 0,
-            total_bet: 0,
             blackjacks: 0,
             busts: 0,
             dealer_blackjacks: 0,
@@ -32,17 +35,29 @@ impl Statistics {
         }
     }
 
-    pub fn update(&mut self, turn: &EndTurn) {
+    /// Update the statistics with the results of a round of blackjack.
+    pub fn update(&mut self, player_hands: Vec<PlayerHand>, dealer_hand: DealerHand) {
         self.turns_played += 1;
-        self.hands_played += turn.player_hands.len();
-        self.wins += turn.player_hands.iter().filter(|hand| hand.winnings > hand.bet).count();
-        self.pushes += turn.player_hands.iter().filter(|hand| hand.winnings == hand.bet).count();
-        self.losses += turn.player_hands.iter().filter(|hand| hand.winnings < hand.bet).count();
-        self.total_bet += turn.player_hands.iter().map(|hand| hand.bet as usize).sum::<usize>();
-        self.blackjacks += turn.player_hands.iter().filter(|hand| hand.status == Status::Blackjack).count();
-        self.busts += turn.player_hands.iter().filter(|hand| hand.status == Status::Bust).count();
-        self.dealer_blackjacks += usize::from(turn.dealer_hand.status == Status::Blackjack);
-        self.dealer_busts += usize::from(turn.dealer_hand.status == Status::Bust);
+        self.hands_played += player_hands.len();
+        for hand in &player_hands {
+            match hand.status {
+                Status::Blackjack => self.blackjacks += 1,
+                Status::Bust => self.busts += 1,
+                _ => {},
+            }
+            match hand.winnings.cmp(&hand.bet) {
+                Ordering::Greater => self.wins += 1,
+                Ordering::Equal => self.pushes += 1,
+                Ordering::Less => self.losses += 1,
+            }
+            self.total_bet = self.total_bet.saturating_add(hand.bet as usize);
+            self.total_won = self.total_won.saturating_add(hand.winnings as usize);
+        }
+        match dealer_hand.status {
+            Status::Blackjack => self.dealer_blackjacks += 1,
+            Status::Bust => self.dealer_busts += 1,
+            _ => {},
+        }
     }
 }
 
@@ -68,6 +83,8 @@ impl Display for Statistics {
         writeln!(f, "  Hands Played: {}", self.hands_played)?;
         writeln!(f, "  Total Bet: {} Chips", self.total_bet)?;
         writeln!(f, "  Average Bet: {} Chips", div(self.total_bet, self.hands_played))?;
+        writeln!(f, "  Total Won: {} Chips", self.total_won)?;
+        writeln!(f, "  Average Win: {} Chips", div(self.total_won, self.hands_played))?;
         writeln!(f, "  Wins: {} ({}%)", self.wins, pct(self.wins, self.hands_played))?;
         writeln!(f, "  Pushes: {} ({}%)", self.pushes, pct(self.pushes, self.hands_played))?;
         writeln!(f, "  Losses: {} ({}%)", self.losses, pct(self.losses, self.hands_played))?;
