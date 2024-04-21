@@ -104,41 +104,41 @@ fn draw_game(frame: &mut Frame, app: &App, area: Rect) {
 fn game_text(game_state: &GameState) -> String {
     match game_state {
         GameState::Betting => "Place your bet!".to_string(),
-        GameState::DealFirstPlayerCard(bet) => {
+        GameState::DealFirstPlayerCard { bet } => {
             format!("DealFirstPlayerCard\nBet: {bet}\n")
         }
-        GameState::DealFirstDealerCard(player_hand) => {
+        GameState::DealFirstDealerCard { player_hand } => {
             format!("DealFirstDealerCard\nPlayer: {}\n", player_hand.value)
         }
-        GameState::DealSecondPlayerCard(player_hand, dealer_hand) => {
+        GameState::DealSecondPlayerCard { player_hand, dealer_hand } => {
             format!(
                 "DealSecondPlayerCard\nPlayer: {}\nDealer showing: {}\n",
                 player_hand.value,
                 dealer_hand.showing()
             )
         }
-        GameState::DealHoleCard(player_hand, dealer_hand) => {
+        GameState::DealHoleCard { player_hand, dealer_hand } => {
             format!(
                 "DealHoleCard\nPlayer: {}\nDealer showing: {}\n",
                 player_hand.value,
                 dealer_hand.showing()
             )
         }
-        GameState::OfferEarlySurrender(player_hand, dealer_hand) => {
+        GameState::OfferEarlySurrender { player_hand, dealer_hand } => {
             format!(
                 "OfferEarlySurrender\nPlayer: {}\nDealer showing: {}\n",
                 player_hand.value,
                 dealer_hand.showing()
             )
         }
-        GameState::OfferInsurance(player_hand, dealer_hand) => {
+        GameState::OfferInsurance { player_hand, dealer_hand } => {
             format!(
                 "OfferInsurance\nPlayer: {}\nDealer showing: {}\n",
                 player_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::CheckDealerHoleCard(player_hand, dealer_hand, insurance) => {
+        GameState::CheckDealerHoleCard { player_hand, dealer_hand, insurance_bet: insurance } => {
             format!(
                 "CheckDealerHoleCard\nPlayer: {}\nDealer showing: {}\n{}\n",
                 player_hand.value,
@@ -150,42 +150,42 @@ fn game_text(game_state: &GameState) -> String {
                 },
             )
         }
-        GameState::PlayPlayerTurn(player_turn, dealer_hand, _) => {
+        GameState::PlayPlayerTurn { player_turn, dealer_hand, .. } => {
             format!(
                 "PlayPlayerTurn\nPlayer: {}\nDealer showing: {}",
                 player_turn.current_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Stand(player_turn, dealer_hand, _) => {
+        GameState::Stand { player_hand: player_turn, dealer_hand, .. } => {
             format!(
                 "Stand\nPlayer: {}\nDealer showing: {}",
                 player_turn.current_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Hit(player_turn, dealer_hand, _) => {
+        GameState::Hit { player_hand: player_turn, dealer_hand, .. } => {
             format!(
                 "Hit\nPlayer: {}\nDealer showing: {}",
                 player_turn.current_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Double(player_turn, dealer_hand, _) => {
+        GameState::Double { player_hand: player_turn, dealer_hand, .. } => {
             format!(
                 "Double\nPlayer: {}\nDealer showing: {}",
                 player_turn.current_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Split(player_turn, dealer_hand, _) => {
+        GameState::Split { player_hand: player_turn, dealer_hand, .. } => {
             format!(
                 "Split\nPlayer: {}\nDealer showing: {}",
                 player_turn.current_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::DealFirstSplitCard(player_turn, new_hand, dealer_hand, _) => {
+        GameState::DealFirstSplitCard { player_turn, new_hand, dealer_hand, .. } => {
             format!(
                 "DealFirstSplitCard\nPlayer: {}\nNew Hand: {}\nDealer showing: {}",
                 player_turn.current_hand.value,
@@ -193,7 +193,7 @@ fn game_text(game_state: &GameState) -> String {
                 dealer_hand.showing(),
             )
         }
-        GameState::DealSecondSplitCard(player_turn, new_hand, dealer_hand, _) => {
+        GameState::DealSecondSplitCard { player_turn, new_hand, dealer_hand, .. } => {
             format!(
                 "DealSecondSplitCard\nPlayer: {}\nNew Hand: {}\nDealer showing: {}",
                 player_turn.current_hand.value,
@@ -201,14 +201,14 @@ fn game_text(game_state: &GameState) -> String {
                 dealer_hand.showing(),
             )
         }
-        GameState::Surrender(player_turn, dealer_hand, _) => {
+        GameState::Surrender { player_turn, dealer_hand, .. } => {
             format!(
                 "Surrender\nPlayer: {}\nDealer showing: {}",
                 player_turn.current_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::RevealHoleCard(finished_hands, dealer_hand, _) => {
+        GameState::RevealHoleCard { finished_hands, dealer_hand, .. } => {
             format!(
                 "The dealer reveals his hole card...\nPlayer: {}\nDealer showing: {}",
                 finished_hands.iter().fold(
@@ -222,7 +222,7 @@ fn game_text(game_state: &GameState) -> String {
                 dealer_hand.showing(),
             )
         }
-        GameState::PlayDealerTurn(finished_hands, dealer_hand, _) => {
+        GameState::PlayDealerTurn { finished_hands, dealer_hand, .. } => {
             format!(
                 "PlayDealerTurn\nPlayer: {}\nDealer: {}",
                 finished_hands.iter().fold(
@@ -236,7 +236,7 @@ fn game_text(game_state: &GameState) -> String {
                 dealer_hand.value,
             )
         }
-        GameState::RoundOver(finished_hands, dealer_hand, _) => {
+        GameState::RoundOver { finished_hands, dealer_hand, .. } => {
             let announcement = match &dealer_hand.status {
                 Status::Blackjack => "Dealer has blackjack!".to_string(),
                 Status::Bust => "Dealer busts!".to_string(),
@@ -257,13 +257,13 @@ fn game_text(game_state: &GameState) -> String {
                 dealer_hand.value,
             )
         }
-        GameState::Payout(total_bet, winnings) => {
-            let difference = i64::from(*winnings) - i64::from(*total_bet);
+        GameState::Payout { total_bet, total_winnings } => {
+            let difference = i64::from(*total_winnings) - i64::from(*total_bet);
             match difference {
-                1.. => format!("You win {winnings} chips (+{difference})!"),
-                0 => format!("You make back {winnings} chips. You push!"),
-                _ if *winnings > 0 => {
-                    format!("You make back {winnings} out of {total_bet} chips!")
+                1.. => format!("You win {total_winnings} chips (+{difference})!"),
+                0 => format!("You make back {total_winnings} chips. You push!"),
+                _ if *total_winnings > 0 => {
+                    format!("You make back {total_winnings} out of {total_bet} chips!")
                 }
                 _ => format!("You lose {} chips!", difference.abs()),
             }

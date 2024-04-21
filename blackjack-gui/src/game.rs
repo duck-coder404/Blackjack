@@ -68,11 +68,11 @@ impl Blackjack {
     pub fn basic_strategy_input(&self) -> Option<Input> {
         match &self.game_state {
             GameState::Betting => Some(Input::Bet(basic_strategy::bet())),
-            GameState::OfferEarlySurrender(player_hand, dealer_hand) => Some(Input::Choice(
+            GameState::OfferEarlySurrender { player_hand, dealer_hand } => Some(Input::Choice(
                 basic_strategy::surrender_early(&self.table, player_hand, dealer_hand),
             )),
-            GameState::OfferInsurance(_, _) => Some(Input::Bet(basic_strategy::bet_insurance())),
-            GameState::PlayPlayerTurn(player_turn, dealer_hand, _) => Some(Input::Action(
+            GameState::OfferInsurance { .. } => Some(Input::Bet(basic_strategy::bet_insurance())),
+            GameState::PlayPlayerTurn { player_turn, dealer_hand, .. } => Some(Input::Action(
                 basic_strategy::play_hand(&self.table, &player_turn.current_hand, dealer_hand),
             )),
             _ => None,

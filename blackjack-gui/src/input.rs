@@ -15,9 +15,9 @@ impl InputField {
     pub fn from_game(state: &GameState, table: &Table) -> Option<Self> {
         match state {
             GameState::Betting => Some(Self::PlaceBet(String::new())),
-            GameState::OfferInsurance(_, _) => Some(Self::PlaceInsuranceBet(String::new())),
-            GameState::OfferEarlySurrender(_, _) => Some(Self::ChooseSurrender),
-            GameState::PlayPlayerTurn(player_turn, _, _) => {
+            GameState::OfferInsurance { .. } => Some(Self::PlaceInsuranceBet(String::new())),
+            GameState::OfferEarlySurrender { .. } => Some(Self::ChooseSurrender),
+            GameState::PlayPlayerTurn { player_turn, .. } => {
                 let current_hand = &player_turn.current_hand;
                 let mut allowed_actions = Vec::with_capacity(5);
                 allowed_actions.push(HandAction::Hit);
