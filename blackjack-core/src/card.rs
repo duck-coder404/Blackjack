@@ -461,8 +461,8 @@ pub mod hand {
 }
 
 pub mod shoe {
-    use rand_distr::WeightedTreeIndex;
     use rand::{thread_rng, Rng};
+    use rand::distributions::WeightedIndex;
 
     use crate::card::Card;
 
@@ -472,7 +472,7 @@ pub mod shoe {
         /// The number of decks in the shoe
         pub decks: u8,
         /// Weighted distribution to draw random cards from the shoe without replacement.
-        dist: WeightedTreeIndex<u16>,
+        dist: WeightedIndex<u16>,
         /// The number of each card remaining in the shoe, indexed by ordinal
         /// This is initialized to the number of decks in the shoe
         remaining: [u16; 52],
@@ -489,7 +489,7 @@ pub mod shoe {
         #[must_use]
         pub fn new(decks: u8, shuffle_threshold: f32) -> Self {
             let remaining = [u16::from(decks); 52]; // Start with all cards present
-            let dist = WeightedTreeIndex::new(remaining).unwrap();
+            let dist = WeightedIndex::new(remaining).unwrap();
             Self {
                 decks,
                 dist,
@@ -529,7 +529,7 @@ pub mod shoe {
         /// Panics if the number of decks is 0
         pub fn shuffle(&mut self) {
             self.remaining = [u16::from(self.decks); 52];
-            self.dist = WeightedTreeIndex::new(self.remaining).unwrap();
+            self.dist = WeightedIndex::new(self.remaining).unwrap();
         }
     }
 }
