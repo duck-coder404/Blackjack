@@ -150,61 +150,61 @@ fn game_text(game_state: &GameState) -> String {
                 },
             )
         }
-        GameState::PlayPlayerTurn { player_turn, dealer_hand, .. } => {
+        GameState::PlayPlayerTurn { player_hands, dealer_hand, .. } => {
             format!(
                 "PlayPlayerTurn\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_hands.current.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Stand { player_hand: player_turn, dealer_hand, .. } => {
+        GameState::Stand { player_hands, dealer_hand, .. } => {
             format!(
                 "Stand\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_hands.current.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Hit { player_hand: player_turn, dealer_hand, .. } => {
+        GameState::Hit { player_hands, dealer_hand, .. } => {
             format!(
                 "Hit\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_hands.current.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Double { player_hand: player_turn, dealer_hand, .. } => {
+        GameState::Double { player_hands, dealer_hand, .. } => {
             format!(
                 "Double\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_hands.current.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Split { player_hand: player_turn, dealer_hand, .. } => {
+        GameState::Split { player_hands, dealer_hand, .. } => {
             format!(
                 "Split\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_hands.current.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::DealFirstSplitCard { player_turn, new_hand, dealer_hand, .. } => {
+        GameState::DealFirstSplitCard { player_hands, new_hand, dealer_hand, .. } => {
             format!(
                 "DealFirstSplitCard\nPlayer: {}\nNew Hand: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_hands.current.value,
                 new_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::DealSecondSplitCard { player_turn, new_hand, dealer_hand, .. } => {
+        GameState::DealSecondSplitCard { player_hands, new_hand, dealer_hand, .. } => {
             format!(
                 "DealSecondSplitCard\nPlayer: {}\nNew Hand: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_hands.current.value,
                 new_hand.value,
                 dealer_hand.showing(),
             )
         }
-        GameState::Surrender { player_turn, dealer_hand, .. } => {
+        GameState::Surrender { player_hands, dealer_hand, .. } => {
             format!(
                 "Surrender\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_hands.current.value,
                 dealer_hand.showing(),
             )
         }

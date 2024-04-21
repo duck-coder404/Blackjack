@@ -1,4 +1,4 @@
-use crate::card::hand::{DealerHand, PlayerHand, PlayerTurn};
+use crate::card::hand::{DealerHand, PlayerHand, PlayerHands};
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum GameState {
@@ -23,27 +23,27 @@ pub enum GameState {
     CheckDealerHoleCard { player_hand: PlayerHand, dealer_hand: DealerHand, insurance_bet: u32 },
     /// The dealer does not have blackjack and the player is playing their hand.
     /// We are waiting for the player to make a move.
-    PlayPlayerTurn { player_turn: PlayerTurn, dealer_hand: DealerHand, insurance_bet: u32 },
+    PlayPlayerTurn { player_hands: PlayerHands, dealer_hand: DealerHand, insurance_bet: u32 },
     /// The player has stood.
     /// We wait for dramatic effect.
-    Stand { player_hand: PlayerTurn, dealer_hand: DealerHand, insurance_bet: u32 },
+    Stand { player_hands: PlayerHands, dealer_hand: DealerHand, insurance_bet: u32 },
     /// The player has hit.
     /// We are waiting for the dealer to deal the next card to the player's current hand.
-    Hit { player_hand: PlayerTurn, dealer_hand: DealerHand, insurance_bet: u32 },
+    Hit { player_hands: PlayerHands, dealer_hand: DealerHand, insurance_bet: u32 },
     /// The player has doubled down.
     /// We are waiting for the dealer to deal the next card to the player's current hand.
-    Double { player_hand: PlayerTurn, dealer_hand: DealerHand, insurance_bet: u32 },
+    Double { player_hands: PlayerHands, dealer_hand: DealerHand, insurance_bet: u32 },
     /// The player has decided to split.
     /// We are waiting for the dealer to separate the player's hand into two.
-    Split { player_hand: PlayerTurn, dealer_hand: DealerHand, insurance_bet: u32 },
+    Split { player_hands: PlayerHands, dealer_hand: DealerHand, insurance_bet: u32 },
     /// The player's hand has been split.
     /// We are waiting for the dealer to deal the new card to their original hand.
-    DealFirstSplitCard { player_turn: PlayerTurn, new_hand: PlayerHand, dealer_hand: DealerHand, insurance_bet: u32 },
+    DealFirstSplitCard { player_hands: PlayerHands, new_hand: PlayerHand, dealer_hand: DealerHand, insurance_bet: u32 },
     /// We are waiting for the dealer to deal the second card to the new split hand.
-    DealSecondSplitCard { player_turn: PlayerTurn, new_hand: PlayerHand, dealer_hand: DealerHand, insurance_bet: u32 },
+    DealSecondSplitCard { player_hands: PlayerHands, new_hand: PlayerHand, dealer_hand: DealerHand, insurance_bet: u32 },
     /// The player has surrendered.
     /// We wait for dramatic effect.
-    Surrender { player_turn: PlayerTurn, dealer_hand: DealerHand, insurance_bet: u32 },
+    Surrender { player_hands: PlayerHands, dealer_hand: DealerHand, insurance_bet: u32 },
     /// The dealer reveals their hole card.
     /// We are waiting for the dealer to play their hand.
     RevealHoleCard { finished_hands: Vec<PlayerHand>, dealer_hand: DealerHand, insurance_bet: u32 },

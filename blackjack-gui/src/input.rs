@@ -17,8 +17,8 @@ impl InputField {
             GameState::Betting => Some(Self::PlaceBet(String::new())),
             GameState::OfferInsurance { .. } => Some(Self::PlaceInsuranceBet(String::new())),
             GameState::OfferEarlySurrender { .. } => Some(Self::ChooseSurrender),
-            GameState::PlayPlayerTurn { player_turn, .. } => {
-                let current_hand = &player_turn.current_hand;
+            GameState::PlayPlayerTurn { player_hands, .. } => {
+                let current_hand = &player_hands.current;
                 let mut allowed_actions = Vec::with_capacity(5);
                 allowed_actions.push(HandAction::Hit);
                 allowed_actions.push(HandAction::Stand);

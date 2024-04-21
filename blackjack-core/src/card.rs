@@ -414,25 +414,25 @@ pub mod hand {
     }
 
     #[derive(Debug, PartialEq, Eq)]
-    pub struct PlayerTurn {
-        pending_hands: Vec<PlayerHand>,
-        pub current_hand: PlayerHand,
-        finished_hands: Vec<PlayerHand>,
+    pub struct PlayerHands {
+        pending: Vec<PlayerHand>,
+        pub current: PlayerHand,
+        finished: Vec<PlayerHand>,
     }
 
-    impl PlayerTurn {
+    impl PlayerHands {
         #[must_use]
-        pub fn new(current_hand: PlayerHand) -> Self {
+        pub fn new(current: PlayerHand) -> Self {
             Self {
-                pending_hands: Vec::new(),
-                current_hand,
-                finished_hands: Vec::new(),
+                pending: Vec::new(),
+                current,
+                finished: Vec::new(),
             }
         }
         
         /// Defer the provided hand to be played after the current hand.
         pub fn defer(&mut self, hand: PlayerHand) {
-            self.pending_hands.push(hand);
+            self.pending.push(hand);
         }
 
         /// Continues playing the current hand if it is in play.
@@ -443,18 +443,18 @@ pub mod hand {
         /// If the current hand is finished and there are no more pending hands,
         /// the finished hands are returned as an error.
         pub fn continue_playing(mut self) -> Result<Self, Vec<PlayerHand>> {
-            if self.current_hand.status == Status::InPlay {
+            if self.current.status == Status::InPlay {
                 Ok(self)
             } else {
-                self.finished_hands.push(self.current_hand);
-                while let Some(hand) = self.pending_hands.pop() {
+                self.finished.push(self.current);
+                while let Some(hand) = self.pending.pop() {
                     if hand.status == Status::InPlay {
-                        self.current_hand = hand;
+                        self.current = hand;
                         return Ok(self);
                     }
-                    self.finished_hands.push(hand);
+                    self.finished.push(hand);
                 }
-                Err(self.finished_hands)
+                Err(self.finished)
             }
         }
     }
