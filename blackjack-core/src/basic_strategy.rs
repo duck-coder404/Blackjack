@@ -1,27 +1,12 @@
 #![allow(clippy::match_same_arms, clippy::unnested_or_patterns)]
 
 use crate::blackjack::{HandAction, Table};
-use crate::card::hand::{DealerHand, PlayerHand};
+use crate::card::hand::{DealerHand, PlayerHand, PlayerTurn};
+use crate::composed;
 
 #[must_use]
 pub const fn bet() -> u32 {
     100 // TODO: Factor out betting strategy
-}
-
-macro_rules! composed {
-    ($hand:ident => $($x:expr),+) => ({
-        let mut values: Vec<u8> = $hand.cards.iter().map(|card| card.rank.worth()).collect();
-        true $(&& match values.iter().position(|&val| val == $x) {
-            Some(pos) => {
-                values.swap_remove(pos);
-                true
-            },
-            None => false,
-        })*
-    });
-    ($hand:ident => $($($x:expr),+);+) => ({
-        false $(|| composed!($hand => $($x),*))*
-    });
 }
 
 #[must_use]
@@ -29,14 +14,14 @@ pub fn surrender_late(table: &Table, player_hand: &PlayerHand, dealer_hand: &Dea
     match (player_hand.value.total, dealer_hand.showing()) {
         (14, 10) => table.shoe.decks == 1 && player_hand.is_pair(),
         (14, 11) => table.shoe.decks == 1 && player_hand.is_pair() && dealer_hand.hits_on_soft_17(),
-        (15, 10) if table.shoe.decks < 8 => composed!(player_hand => 9, 6; 10, 5),
+        (15, 10) if table.shoe.decks < 8 => composed!(player_hand => 9, 6 | 10, 5),
         (15, 10) if table.shoe.decks >= 8 => true,
-        (15, 11) if table.shoe.decks < 4 => dealer_hand.hits_on_soft_17() && composed!(player_hand => 9, 6; 10, 5),
+        (15, 11) if table.shoe.decks < 4 => dealer_hand.hits_on_soft_17() && composed!(player_hand => 9, 6 | 10, 5),
         (15, 11) if table.shoe.decks >= 4 => true,
         (16, 9) => table.shoe.decks >= 4,
         (16, 10) => true,
         (16, 11) if table.shoe.decks == 1 && !dealer_hand.hits_on_soft_17() => composed!(player_hand => 10, 6),
-        (16, 11) if table.shoe.decks <= 2 && dealer_hand.hits_on_soft_17() => composed!(player_hand => 9, 7; 10, 6),
+        (16, 11) if table.shoe.decks <= 2 && dealer_hand.hits_on_soft_17() => composed!(player_hand => 9, 7 | 10, 6),
         (16, 11) if table.shoe.decks == 2 && !dealer_hand.hits_on_soft_17() => true,
         (16, 11) if table.shoe.decks > 2 => true,
         (15 | 17, 11) => dealer_hand.hits_on_soft_17(),
@@ -46,9 +31,9 @@ pub fn surrender_late(table: &Table, player_hand: &PlayerHand, dealer_hand: &Dea
 
 #[must_use]
 pub fn surrender_early(table: &Table, player_hand: &PlayerHand, dealer_hand: &DealerHand) -> bool {
-    match (player_hand.value.soft, table.check_split_allowed(player_hand).is_ok()) {
+    match (player_hand.value.soft, player_hand.is_pair()) {
         (false, false) => surrender_early_hard(player_hand, dealer_hand),
-        (true, false) => false,
+        (true, false) => false, // Soft (non-pair) hands should not be surrendered early
         (_, true) => surrender_early_pair(player_hand, dealer_hand, table),
     }
 }
@@ -93,53 +78,53 @@ enum PreferredAction {
 
 /// Assuming 4-8 decks
 #[must_use]
-pub fn play_hand(table: &Table, player_hand: &PlayerHand, dealer_hand: &DealerHand) -> HandAction {
-    let preferred = match (player_hand.value.soft, table.check_split_allowed(player_hand).is_ok()) {
-        (false, false) => make_move_hard(table, player_hand, dealer_hand),
-        (true, false) => make_move_soft(player_hand, dealer_hand),
-        (_, true) => make_move_splittable(player_hand, dealer_hand),
+pub fn play_hand(table: &Table, player_hands: &PlayerTurn, dealer_hand: &DealerHand) -> HandAction {
+    let preferred = match (player_hands.current.value.soft, table.check_split_allowed(player_hands).is_ok()) {
+        (false, false) => make_move_hard(table, &player_hands.current, dealer_hand),
+        (true, false) => make_move_soft(&player_hands.current, dealer_hand),
+        (_, true) => make_move_splittable(&player_hands.current, dealer_hand),
     };
     match preferred {
         PreferredAction::Stand => HandAction::Stand,
         PreferredAction::Hit => HandAction::Hit,
         PreferredAction::Split => HandAction::Split,
         PreferredAction::DoubleOrHit => {
-            if table.check_double_allowed(player_hand).is_ok() {
+            if table.check_double_allowed(player_hands).is_ok() {
                 HandAction::Double
             } else {
                 HandAction::Hit
             }
         }
         PreferredAction::DoubleOrStand => {
-            if table.check_double_allowed(player_hand).is_ok() {
+            if table.check_double_allowed(player_hands).is_ok() {
                 HandAction::Double
             } else {
                 HandAction::Stand
             }
         }
         PreferredAction::SurrenderOrHit => {
-            if table.check_surrender_allowed(player_hand).is_ok() {
+            if table.check_surrender_allowed(&player_hands.current).is_ok() {
                 HandAction::Surrender
             } else {
                 HandAction::Hit
             }
         }
         PreferredAction::SurrenderOrStand => {
-            if table.check_surrender_allowed(player_hand).is_ok() {
+            if table.check_surrender_allowed(&player_hands.current).is_ok() {
                 HandAction::Surrender
             } else {
                 HandAction::Stand
             }
         }
         PreferredAction::SurrenderOrSplit => {
-            if table.check_surrender_allowed(player_hand).is_ok() {
+            if table.check_surrender_allowed(&player_hands.current).is_ok() {
                 HandAction::Surrender
             } else {
                 HandAction::Split
             }
         }
         PreferredAction::SplitIfDoubleAfterSplitAllowedElseHit => {
-            if table.rules.double_after_split && table.check_split_allowed(player_hand).is_ok() {
+            if table.rules.double_after_split {
                 HandAction::Split
             } else {
                 HandAction::Hit

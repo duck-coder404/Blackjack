@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use crate::card::hand::{DealerHand, PlayerHand, PlayerHands, Status};
+use crate::card::hand::{DealerHand, PlayerHand, PlayerTurn, Status};
 use crate::card::shoe::Shoe;
 use crate::rules::Rules;
 use crate::state::GameState;
@@ -30,10 +30,10 @@ pub enum Input {
 /// It holds the player's chips, the shoe, and the game rules.
 #[derive(Debug)]
 pub struct Table {
-    pub chips: u32,
-    pub shoe: Shoe,
-    pub rules: Rules,
-    pub statistics: Statistics,
+    pub chips: u32,             // The player's chips at this table
+    pub shoe: Shoe,             // The shoe of cards used in the game
+    pub rules: Rules,           // The table rules
+    pub statistics: Statistics, // The continuous game statistics
     fast_forward: bool, // Only stop at the states requiring user input and do not validate the input
 }
 
@@ -199,18 +199,18 @@ impl Table {
             ) => Ok(self.check_dealer_hole_card(player_hand, dealer_hand, insurance_bet)),
             (
                 GameState::PlayPlayerTurn {
-                    player_hands,
+                    player_turn,
                     dealer_hand,
                     insurance_bet,
                 },
                 input,
             ) => {
                 if let Some(Input::Action(action)) = input {
-                    self.play_player_turn(player_hands, dealer_hand, insurance_bet, action)
+                    self.play_player_turn(player_turn, dealer_hand, insurance_bet, action)
                 } else {
                     Err((
                         GameState::PlayPlayerTurn {
-                            player_hands,
+                            player_turn,
                             dealer_hand,
                             insurance_bet,
                         },
@@ -220,93 +220,89 @@ impl Table {
             }
             (
                 GameState::Stand {
-                    player_hands: turn,
+                    player_turn,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.stand(turn, dealer_hand, insurance_bet)),
+            ) => Ok(self.stand(player_turn, dealer_hand, insurance_bet)),
             (
                 GameState::Hit {
-                    player_hands: turn,
+                    player_turn,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.hit(turn, dealer_hand, insurance_bet)),
+            ) => Ok(self.hit(player_turn, dealer_hand, insurance_bet)),
             (
                 GameState::Double {
-                    player_hands: turn,
+                    player_turn,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.double(turn, dealer_hand, insurance_bet)),
+            ) => Ok(self.double(player_turn, dealer_hand, insurance_bet)),
             (
                 GameState::Split {
-                    player_hands: turn,
+                    player_turn,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.split(turn, dealer_hand, insurance_bet)),
+            ) => Ok(self.split(player_turn, dealer_hand, insurance_bet)),
             (
                 GameState::DealFirstSplitCard {
-                    player_hands: turn,
+                    player_turn,
                     new_hand,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.deal_first_split_card(turn, new_hand, dealer_hand, insurance_bet)),
+            ) => Ok(self.deal_first_split_card(player_turn, new_hand, dealer_hand, insurance_bet)),
             (
                 GameState::DealSecondSplitCard {
-                    player_hands: turn,
+                    player_turn,
                     new_hand,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.deal_second_split_card(turn, new_hand, dealer_hand, insurance_bet)),
+            ) => Ok(self.deal_second_split_card(player_turn, new_hand, dealer_hand, insurance_bet)),
             (
                 GameState::Surrender {
-                    player_hands: turn,
+                    player_turn,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.late_surrender(turn, dealer_hand, insurance_bet)),
+            ) => Ok(self.late_surrender(player_turn, dealer_hand, insurance_bet)),
             (
                 GameState::RevealHoleCard {
-                    finished_hands: player_hands,
+                    finished_hands,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.play_dealer_turn_or_end_round(player_hands, dealer_hand, insurance_bet)),
+            ) => Ok(self.play_dealer_turn_or_end_round(finished_hands, dealer_hand, insurance_bet)),
             (
                 GameState::PlayDealerTurn {
-                    finished_hands: player_hands,
+                    finished_hands,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.play_dealer_turn(player_hands, dealer_hand, insurance_bet)),
+            ) => Ok(self.play_dealer_turn(finished_hands, dealer_hand, insurance_bet)),
             (
                 GameState::RoundOver {
-                    finished_hands: player_hands,
+                    finished_hands,
                     dealer_hand,
                     insurance_bet,
                 },
                 _,
-            ) => Ok(self.end_round(player_hands, dealer_hand, insurance_bet)),
-            (
-                GameState::Payout {
-                    total_bet: _,
-                    total_winnings,
-                },
-                _,
-            ) => Ok(self.pay_out_winnings(total_winnings)),
+            ) => Ok(self.end_round(finished_hands, dealer_hand, insurance_bet)),
+            (GameState::Payout { total_winnings, .. }, _) => {
+                Ok(self.pay_out_winnings(total_winnings))
+            }
             (GameState::Shuffle, _) => Ok(self.shuffle_dispenser()),
             (GameState::GameOver, _) => Err((GameState::GameOver, TransitionError::WrongInput)),
         }
@@ -317,12 +313,12 @@ impl Table {
     /// and the maximum splits and double after split rules do not prevent them from doing so.
     /// # Errors
     /// Returns an error containing the reason why the player cannot double down.
-    pub fn check_double_allowed(&self, hand: &PlayerHand) -> Result<(), DoubleError> {
-        if hand.size() != 2 {
+    pub fn check_double_allowed(&self, player_turn: &PlayerTurn) -> Result<(), DoubleError> {
+        if player_turn.current.size() != 2 {
             Err(DoubleError::NotTwoCards)
-        } else if hand.bet > self.chips {
+        } else if player_turn.current.bet > self.chips {
             Err(DoubleError::CantAfford)
-        } else if hand.splits > 0 && !self.rules.double_after_split {
+        } else if player_turn.current_index() != 0 && !self.rules.double_after_split {
             Err(DoubleError::DoubleAfterSplitNotAllowed)
         } else {
             Ok(())
@@ -334,18 +330,18 @@ impl Table {
     /// and the maximum splits and split-aces rules do not prevent them from doing so.
     /// # Errors
     /// Returns an error containing the reason why the player cannot split.
-    pub fn check_split_allowed(&self, hand: &PlayerHand) -> Result<(), SplitError> {
-        if !hand.is_pair() {
+    pub fn check_split_allowed(&self, player_turn: &PlayerTurn) -> Result<(), SplitError> {
+        if !player_turn.current.is_pair() {
             Err(SplitError::NotPair)
-        } else if hand.bet > self.chips {
+        } else if player_turn.current.bet > self.chips {
             Err(SplitError::CantAfford)
         } else if self
             .rules
             .max_splits
-            .map_or(false, |max| hand.splits >= max)
+            .map_or(false, |max| player_turn.hands() > max)
         {
             Err(SplitError::MaxSplitsReached)
-        } else if hand.value.soft && !self.rules.split_aces {
+        } else if player_turn.current.value.soft && !self.rules.split_aces {
             Err(SplitError::SplitAcesNotAllowed)
         } else {
             Ok(())
@@ -454,8 +450,7 @@ impl Table {
     ) -> GameState {
         dealer_hand += self.shoe.draw_card();
         if dealer_hand.showing() < 10 || player_hand.status == Status::Blackjack {
-            let player_turn = PlayerHands::new(player_hand);
-            self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, 0)
+            self.play_player_turn_or_go_to_dealer_turn(player_hand.into(), dealer_hand, 0)
         } else if self.rules.offer_early_surrender {
             GameState::OfferEarlySurrender {
                 player_hand,
@@ -490,10 +485,10 @@ impl Table {
     ) -> GameState {
         if surrender {
             if self.fast_forward {
-                self.late_surrender(PlayerHands::new(player_hand), dealer_hand, 0)
+                self.late_surrender(player_hand.into(), dealer_hand, 0)
             } else {
                 GameState::Surrender {
-                    player_hands: PlayerHands::new(player_hand),
+                    player_turn: player_hand.into(),
                     dealer_hand,
                     insurance_bet: 0,
                 }
@@ -575,7 +570,7 @@ impl Table {
             }
         } else {
             self.play_player_turn_or_go_to_dealer_turn(
-                PlayerHands::new(player_hand),
+                player_hand.into(),
                 dealer_hand,
                 insurance_bet,
             )
@@ -588,47 +583,47 @@ impl Table {
     /// Doubling down, splitting, and surrendering are only allowed in certain circumstances.
     fn play_player_turn(
         &mut self,
-        player_hands: PlayerHands,
+        player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
         action: HandAction,
     ) -> TransitionResult {
         match action {
             HandAction::Hit if self.fast_forward => {
-                Ok(self.hit(player_hands, dealer_hand, insurance_bet))
+                Ok(self.hit(player_turn, dealer_hand, insurance_bet))
             }
             HandAction::Hit => Ok(GameState::Hit {
-                player_hands,
+                player_turn,
                 dealer_hand,
                 insurance_bet,
             }),
             HandAction::Stand if self.fast_forward => {
-                Ok(self.stand(player_hands, dealer_hand, insurance_bet))
+                Ok(self.stand(player_turn, dealer_hand, insurance_bet))
             }
             HandAction::Stand => Ok(GameState::Stand {
-                player_hands,
+                player_turn,
                 dealer_hand,
                 insurance_bet,
             }),
             HandAction::Double if self.fast_forward => {
                 // Simulated moves should already be valid, so we don't need to check them
-                self.chips -= player_hands.current.bet;
-                Ok(self.double(player_hands, dealer_hand, insurance_bet))
+                self.chips -= player_turn.current.bet;
+                Ok(self.double(player_turn, dealer_hand, insurance_bet))
             }
             HandAction::Double => {
-                if let Err(err) = self.check_double_allowed(&player_hands.current) {
+                if let Err(err) = self.check_double_allowed(&player_turn) {
                     Err((
                         GameState::PlayPlayerTurn {
-                            player_hands,
+                            player_turn,
                             dealer_hand,
                             insurance_bet,
                         },
                         TransitionError::DoubleError(err),
                     ))
                 } else {
-                    self.chips -= player_hands.current.bet;
+                    self.chips -= player_turn.current.bet;
                     Ok(GameState::Double {
-                        player_hands,
+                        player_turn,
                         dealer_hand,
                         insurance_bet,
                     })
@@ -636,23 +631,23 @@ impl Table {
             }
             HandAction::Split if self.fast_forward => {
                 // Simulated moves should already be valid, so we don't need to check them
-                self.chips -= player_hands.current.bet;
-                Ok(self.split(player_hands, dealer_hand, insurance_bet))
+                self.chips -= player_turn.current.bet;
+                Ok(self.split(player_turn, dealer_hand, insurance_bet))
             }
             HandAction::Split => {
-                if let Err(err) = self.check_split_allowed(&player_hands.current) {
+                if let Err(err) = self.check_split_allowed(&player_turn) {
                     Err((
                         GameState::PlayPlayerTurn {
-                            player_hands,
+                            player_turn,
                             dealer_hand,
                             insurance_bet,
                         },
                         TransitionError::SplitError(err),
                     ))
                 } else {
-                    self.chips -= player_hands.current.bet;
+                    self.chips -= player_turn.current.bet;
                     Ok(GameState::Split {
-                        player_hands,
+                        player_turn,
                         dealer_hand,
                         insurance_bet,
                     })
@@ -660,13 +655,13 @@ impl Table {
             }
             HandAction::Surrender if self.fast_forward => {
                 // Simulated moves should already be valid, so we don't need to check them
-                Ok(self.late_surrender(player_hands, dealer_hand, insurance_bet))
+                Ok(self.late_surrender(player_turn, dealer_hand, insurance_bet))
             }
             HandAction::Surrender => {
-                if let Err(err) = self.check_surrender_allowed(&player_hands.current) {
+                if let Err(err) = self.check_surrender_allowed(&player_turn.current) {
                     Err((
                         GameState::PlayPlayerTurn {
-                            player_hands,
+                            player_turn,
                             dealer_hand,
                             insurance_bet,
                         },
@@ -674,7 +669,7 @@ impl Table {
                     ))
                 } else {
                     Ok(GameState::Surrender {
-                        player_hands,
+                        player_turn,
                         dealer_hand,
                         insurance_bet,
                     })
@@ -687,52 +682,52 @@ impl Table {
     /// We continue the player's turn if they still have hands in play, or go to the dealer's turn.
     fn hit(
         &mut self,
-        mut player_hands: PlayerHands,
+        mut player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_hands.current += self.shoe.draw_card();
-        self.play_player_turn_or_go_to_dealer_turn(player_hands, dealer_hand, insurance_bet)
+        player_turn.current += self.shoe.draw_card();
+        self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 
     /// The player stands and the hand is finished.
     /// We continue the player's turn if they still have hands in play, or go to the dealer's turn.
     fn stand(
         &mut self,
-        mut player_hands: PlayerHands,
+        mut player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_hands.current.stand();
-        self.play_player_turn_or_go_to_dealer_turn(player_hands, dealer_hand, insurance_bet)
+        player_turn.current.stand();
+        self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 
     /// The player doubles down and the hand is finished.
     /// We continue the player's turn if they still have hands in play, or go to the dealer's turn.
     fn double(
         &mut self,
-        mut player_hands: PlayerHands,
+        mut player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_hands.current.double(self.shoe.draw_card());
-        self.play_player_turn_or_go_to_dealer_turn(player_hands, dealer_hand, insurance_bet)
+        player_turn.current.double(self.shoe.draw_card());
+        self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 
     /// The dealer separates the player's hand into two.
     /// Next, the dealer will deal a new card to the first of the two split hands.
     fn split(
         &mut self,
-        mut player_hands: PlayerHands,
+        mut player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        let new_hand = player_hands.current.split();
+        let new_hand = player_turn.current.split();
         if self.fast_forward {
-            self.deal_first_split_card(player_hands, new_hand, dealer_hand, insurance_bet)
+            self.deal_first_split_card(player_turn, new_hand, dealer_hand, insurance_bet)
         } else {
             GameState::DealFirstSplitCard {
-                player_hands,
+                player_turn,
                 new_hand,
                 dealer_hand,
                 insurance_bet,
@@ -744,17 +739,17 @@ impl Table {
     /// Next, the dealer will deal a new card to the second of the two split hands.
     fn deal_first_split_card(
         &mut self,
-        mut player_hands: PlayerHands,
+        mut player_turn: PlayerTurn,
         new_hand: PlayerHand,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_hands.current += self.shoe.draw_card();
+        player_turn.current += self.shoe.draw_card();
         if self.fast_forward {
-            self.deal_second_split_card(player_hands, new_hand, dealer_hand, insurance_bet)
+            self.deal_second_split_card(player_turn, new_hand, dealer_hand, insurance_bet)
         } else {
             GameState::DealSecondSplitCard {
-                player_hands,
+                player_turn,
                 new_hand,
                 dealer_hand,
                 insurance_bet,
@@ -767,26 +762,26 @@ impl Table {
     /// We continue the player's turn if they still have hands in play, or go to the dealer's turn.
     fn deal_second_split_card(
         &mut self,
-        mut player_hands: PlayerHands,
+        mut player_turn: PlayerTurn,
         mut new_hand: PlayerHand,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
         new_hand += self.shoe.draw_card();
-        player_hands.defer(new_hand);
-        self.play_player_turn_or_go_to_dealer_turn(player_hands, dealer_hand, insurance_bet)
+        player_turn.defer(new_hand);
+        self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 
     /// The player surrenders and the hand is finished.
     /// We continue the player's turn if they still have hands in play, or go to the dealer's turn.
     fn late_surrender(
         &mut self,
-        mut player_hands: PlayerHands,
+        mut player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_hands.current.surrender();
-        self.play_player_turn_or_go_to_dealer_turn(player_hands, dealer_hand, insurance_bet)
+        player_turn.current.surrender();
+        self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 
     /// We check if the player still has a hand to play.
@@ -794,13 +789,13 @@ impl Table {
     /// Otherwise, the player's turn is over and the dealer will reveal their hole card.
     fn play_player_turn_or_go_to_dealer_turn(
         &mut self,
-        player_hands: PlayerHands,
+        player_turn: PlayerTurn,
         mut dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        match player_hands.continue_playing() {
-            Ok(player_hands) => GameState::PlayPlayerTurn {
-                player_hands,
+        match player_turn.continue_playing() {
+            Ok(player_turn) => GameState::PlayPlayerTurn {
+                player_turn,
                 dealer_hand,
                 insurance_bet,
             },

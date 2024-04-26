@@ -117,7 +117,7 @@ impl Card {
 pub mod hand {
     use std::cmp::Ordering;
     use std::fmt;
-    use std::ops::{Add, AddAssign};
+    use std::ops::AddAssign;
 
     use crate::card::{Card, Rank};
     use crate::rules::{BlackjackPayout, DealerSoft17Action};
@@ -131,10 +131,9 @@ pub mod hand {
         pub total: u8,
     }
 
-    impl Value {
-        /// Creates a new Value from the given card.
-        /// Aces are soft.
-        fn new(card: &Card) -> Self {
+    impl From<&Card> for Value {
+        /// Converts a card into a hand value.
+        fn from(card: &Card) -> Self {
             Self {
                 soft: card.rank == Rank::Ace,
                 total: card.rank.worth(),
@@ -142,21 +141,24 @@ pub mod hand {
         }
     }
 
-    impl AddAssign<&Card> for Value {
+    impl<T: Into<Value>> AddAssign<T> for Value {
         /// Adds two hand values together, taking care to handle soft values and avoid busting if possible
-        fn add_assign(&mut self, rhs: &Card) {
-            let Self { mut soft, total: mut card_value } = Self::new(rhs);
+        fn add_assign(&mut self, rhs: T) {
+            let Self {
+                mut soft,
+                total: mut worth,
+            } = rhs.into();
             // Prevent busting by converting the soft ace to a hard ace
-            if soft && self.total + card_value > 21 {
-                card_value -= 10; // Convert the ace from 11 to 1
+            if soft && self.total + worth > 21 {
+                worth -= 10; // Convert the ace from 11 to 1
                 soft = false;
             }
             // Prevent busting by converting the current hand's soft ace to a hard ace
-            if self.soft && self.total + card_value > 21 {
+            if self.soft && self.total + worth > 21 {
                 self.total -= 10; // Convert the ace from 11 to 1
                 self.soft = false;
             }
-            self.total += card_value; // Add the card's worth to the total
+            self.total += worth; // Add the card's worth to the total
             self.soft |= soft; // If either hand has a soft ace, the result is a soft hand
         }
     }
@@ -186,14 +188,14 @@ pub mod hand {
     }
 
     /// Represents the dealer's hand.
-    #[derive(Debug, Default, PartialEq, Eq)]
+    #[derive(Debug, PartialEq, Eq)]
     pub struct DealerHand {
-        /// The cards in this hand
-        pub cards: Vec<Card>,
         /// The value of this hand
         pub value: Value,
         /// The status of this hand
         pub status: Status,
+        /// The cards in this hand
+        cards: Vec<Card>,
         /// Whether the dealer stands or hits on soft 17
         soft_17_action: DealerSoft17Action,
     }
@@ -207,22 +209,11 @@ pub mod hand {
             self.cards.push(rhs);
             self.status = match (self.value.soft, self.value.total) {
                 (true, 17) if self.hits_on_soft_17() => Status::InPlay,
-                (true, 21) if self.size() == 2 => Status::Blackjack,
+                (true, 21) if self.cards.len() == 2 => Status::Blackjack,
                 (_, 17..=21) => Status::Stood,
                 (_, 22..) => Status::Bust,
                 _ => Status::InPlay,
             };
-        }
-    }
-
-    impl Add<Card> for DealerHand {
-        type Output = Self;
-
-        /// Adds a card to the dealer's hand, updating the value and announcing the card.
-        /// The dealer's second (hole) card is not announced.
-        fn add(mut self, rhs: Card) -> Self::Output {
-            self += rhs;
-            self
         }
     }
 
@@ -231,15 +222,11 @@ pub mod hand {
         #[must_use]
         pub fn new(card: Card, soft_17_action: DealerSoft17Action) -> Self {
             Self {
+                value: Value::from(&card),
+                status: Status::InPlay,
+                cards: vec![card],
                 soft_17_action,
-                ..Self::default()
-            } + card // Add the card to the hand to initialize it
-        }
-
-        /// Returns the number of cards in this hand.
-        #[must_use]
-        pub fn size(&self) -> usize {
-            self.cards.len()
+            }
         }
 
         /// Returns the worth of the dealer's up card, which is what the player must base their decisions on.
@@ -247,7 +234,7 @@ pub mod hand {
         pub fn showing(&self) -> u8 {
             self.cards[0].rank.worth()
         }
-        
+
         /// Returns whether the dealer hits on soft 17.
         #[must_use]
         pub fn hits_on_soft_17(&self) -> bool {
@@ -256,18 +243,16 @@ pub mod hand {
     }
 
     /// Represents a hand of cards held by the player.
-    #[derive(Debug, Default, PartialEq, Eq)]
+    #[derive(Debug, PartialEq, Eq)]
     pub struct PlayerHand {
-        /// The cards in this hand
-        pub cards: Vec<Card>,
+        /// The player's bet on this hand
+        pub bet: u32,
         /// The value of this hand
         pub value: Value,
         /// The status of this hand
         pub status: Status,
-        /// The number of times this hand has been split
-        pub splits: u8,
-        /// The player's bet on this hand
-        pub bet: u32,
+        /// The cards in this hand
+        pub cards: Vec<Card>,
         /// The player's winnings on this hand
         pub winnings: u32,
     }
@@ -287,24 +272,17 @@ pub mod hand {
         }
     }
 
-    impl Add<Card> for PlayerHand {
-        type Output = Self;
-
-        /// Adds a card to the player's hand, updating the value and announcing the card.
-        fn add(mut self, rhs: Card) -> Self::Output {
-            self += rhs;
-            self
-        }
-    }
-
     impl PlayerHand {
         /// Creates a new player hand with the given card and bet.
         #[must_use]
         pub fn new(card: Card, bet: u32) -> Self {
             Self {
                 bet,
-                ..Self::default()
-            } + card // Add the card to the hand to initialize it
+                value: Value::from(&card),
+                status: Status::InPlay,
+                cards: vec![card],
+                winnings: 0,
+            }
         }
 
         /// The player stands on this hand.
@@ -317,10 +295,19 @@ pub mod hand {
         /// The bet is doubled, and the provided card is added to the hand.
         /// If the hand is not bust, the player stands.
         pub fn double(&mut self, card: Card) {
-            debug_assert_eq!(self.size(), 2, "cannot double down on hand with more than two cards");
-            debug_assert_eq!(self.status, Status::InPlay, "cannot double down on finished hand");
+            debug_assert_eq!(
+                self.size(),
+                2,
+                "cannot double down on hand with more than two cards"
+            );
+            debug_assert_eq!(
+                self.status,
+                Status::InPlay,
+                "cannot double down on finished hand"
+            );
             self.bet *= 2;
             *self += card;
+            // If the hand is not finished otherwise, the player stands
             if self.status == Status::InPlay {
                 self.status = Status::Stood;
             }
@@ -334,18 +321,24 @@ pub mod hand {
         pub fn split(&mut self) -> Self {
             debug_assert!(self.is_pair(), "cannot split hand that is not a pair");
             let split_card = self.cards.pop().expect("Hand must be a pair"); // Remove the second card
-            self.value = Value::new(&self.cards[0]); // The value of this hand is now the first card
-            // Create a new hand with the second card
+            self.value = Value::from(&self.cards[0]); // The value of this hand is now the first card
+                                                      // Create a new hand with the second card
             Self {
-                splits: self.splits + 1, // Increment the number of splits
-                bet: self.bet,
-                ..Self::default()
-            } + split_card // Add the split card to the new hand to update it
+                bet: self.bet, // The new hand has the same bet
+                value: Value::from(&split_card),
+                status: Status::InPlay,
+                cards: vec![split_card],
+                winnings: 0,
+            }
         }
 
         /// The player surrenders this hand.
         pub fn surrender(&mut self) {
-            debug_assert_eq!(self.size(), 2, "cannot surrender on hand with more than two cards");
+            debug_assert_eq!(
+                self.size(),
+                2,
+                "cannot surrender on hand with more than two cards"
+            );
             self.status = Status::Surrendered;
         }
 
@@ -371,7 +364,7 @@ pub mod hand {
             blackjack_payout: BlackjackPayout,
         ) -> u32 {
             match (&self.status, &dealer_hand.status) {
-                (Status::Surrendered, _) => self.payout_surrender(), // Surrender
+                (Status::Surrendered, _) => self.payout_surrender(), // Player surrender
                 (Status::Blackjack, Status::Blackjack) => self.payout_push(), // Blackjack push
                 (Status::Blackjack, _) => self.payout_blackjack(blackjack_payout), // Blackjack win
                 (_, Status::Blackjack) | (Status::Bust, _) => self.payout_loss(), // Dealer blackjack or player bust
@@ -413,23 +406,39 @@ pub mod hand {
         }
     }
 
+    /// All the player's hands in a round of blackjack.
+    /// This always starts with just one hand, but the player might split it into arbitrarily many.
+    /// Pending hands are hands that have been split from the current hand to be played later.
+    /// Finished hands are hands that are no longer in play.
     #[derive(Debug, PartialEq, Eq)]
-    pub struct PlayerHands {
+    pub struct PlayerTurn {
         pending: Vec<PlayerHand>,
         pub current: PlayerHand,
         finished: Vec<PlayerHand>,
     }
 
-    impl PlayerHands {
-        #[must_use]
-        pub fn new(current: PlayerHand) -> Self {
+    impl From<PlayerHand> for PlayerTurn {
+        fn from(hand: PlayerHand) -> Self {
             Self {
                 pending: Vec::new(),
-                current,
-                finished: Vec::new(),
+                current: hand,
+                finished: Vec::with_capacity(1),
             }
         }
-        
+    }
+
+    impl PlayerTurn {
+        /// Returns the total number of hands belonging to the player.
+        /// This includes all finished hands, the current hand, and any pending hands.
+        pub fn hands(&self) -> u8 {
+            self.finished.len() as u8 + 1 + self.pending.len() as u8
+        }
+
+        /// Returns the index of the current hand, starting at 0 for the original hand.
+        pub fn current_index(&self) -> u8 {
+            self.finished.len() as u8
+        }
+
         /// Defer the provided hand to be played after the current hand.
         pub fn defer(&mut self, hand: PlayerHand) {
             self.pending.push(hand);
@@ -458,10 +467,41 @@ pub mod hand {
             }
         }
     }
+
+    /// Tests whether a hand consists of cards with the specified values.
+    /// # Example
+    /// ```
+    /// use blackjack_core::card::{Card, Rank, Suit};
+    /// use blackjack_core::card::hand::PlayerHand;
+    /// use blackjack_core::composed;
+    /// let mut hand = PlayerHand::new(Card { rank: Rank::Ten, suit: Suit::Clubs }, 100);
+    /// hand += Card { rank: Rank::Five, suit: Suit::Diamonds };
+    /// assert!(composed!(hand => 10, 5));
+    /// assert!(!composed!(hand => 9, 5));
+    /// assert!(composed!(hand => 9, 5 | 10, 5 | 10, 6));
+    /// assert!(!composed!(hand => 11, 5, 2));
+    /// assert!(!composed!(hand => 11));
+    /// ```
+    #[macro_export]
+    macro_rules! composed {
+        ($hand:ident => $($x:expr),+) => ({
+            let mut values: Vec<u8> = $hand.cards.iter().map(|card| card.rank.worth()).collect();
+            true $(&& match values.iter().position(|&val| val == $x) {
+                Some(pos) => {
+                    values.swap_remove(pos);
+                    true
+                },
+                None => false,
+            })* && values.is_empty()
+        });
+        ($hand:ident => $($($x:expr),+) | +) => ({
+            false $(|| composed!($hand => $($x),*))*
+        });
+    }
 }
 
 pub mod shoe {
-    use rand::{thread_rng, Rng};
+    use rand::{Rng, thread_rng};
     use rand::distributions::WeightedIndex;
 
     use crate::card::Card;

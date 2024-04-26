@@ -17,18 +17,17 @@ impl InputField {
             GameState::Betting => Some(Self::PlaceBet(String::new())),
             GameState::OfferInsurance { .. } => Some(Self::PlaceInsuranceBet(String::new())),
             GameState::OfferEarlySurrender { .. } => Some(Self::ChooseSurrender),
-            GameState::PlayPlayerTurn { player_hands, .. } => {
-                let current_hand = &player_hands.current;
+            GameState::PlayPlayerTurn { player_turn, .. } => {
                 let mut allowed_actions = Vec::with_capacity(5);
                 allowed_actions.push(HandAction::Hit);
                 allowed_actions.push(HandAction::Stand);
-                if table.check_double_allowed(current_hand).is_ok() {
+                if table.check_double_allowed(player_turn).is_ok() {
                     allowed_actions.push(HandAction::Double);
                 }
-                if table.check_split_allowed(current_hand).is_ok() {
+                if table.check_split_allowed(player_turn).is_ok() {
                     allowed_actions.push(HandAction::Split);
                 }
-                if table.check_surrender_allowed(current_hand).is_ok() {
+                if table.check_surrender_allowed(&player_turn.current).is_ok() {
                     allowed_actions.push(HandAction::Surrender);
                 }
                 Some(Self::PlayHand(allowed_actions))
