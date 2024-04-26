@@ -1,24 +1,27 @@
 # Blackjack
 
-This is a simple command-line Blackjack game that I made in Rust.
+This is a Blackjack game/simulator that I made in Rust, implemented via a state machine.
+My goal with this project is to enable users to investigate the difference in the house edge between arbitrary table rules, by running millions of concurrent simulations.
+One should be able to start two concurrent simulations with slightly different rules and see how the results change in the long run.
+
+The project consists of three separate crates:
+
+- `blackjack-core`: The backend functionality, including the state machine and data object model.
+- `blackjack-cli`: A simple command-line frontend. This was the original format of the application.
+- `blackjack-gui`: A more advanced GUI application built using [Ratatui](https://github.com/ratatui-org/ratatui).
 
 ## Features
 
-- [x] Basic Blackjack gameplay
-- [x] Betting
-- [x] Doubling down
-- [x] Splitting (infinitely many times)
-- [x] Configurable number of decks (or infinite)
-- [x] Configurable shuffle point
-- [x] Configurable dealer hit/stand on soft 17
-- [x] Configurable starting chips
-- [x] Configurable Blackjack payout (3:2 or 6:5)
+- [x] Fully-featured Blackjack gameplay
+- [x] Highly configurable
 - [x] Surrendering (early and late)
 - [x] Insurance (even though it's a bad idea)
+- [x] Simulation with Basic Strategy
+- [x] (GUI) Many simultaneous games
+- [x] (GUI) Continuous game statistics
 
 ## TODOs
 
-- [ ] Configurable double after split
-- [ ] Configurable resplitting aces
-- [ ] Multiplayer support
-- [ ] Browser-based GUI
+- [ ] Display more visuals in the GUI
+- [ ] Switch between gameplay and simulation on-the-fly
+- [ ] Rule-adaptive basic strategy
