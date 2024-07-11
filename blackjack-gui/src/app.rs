@@ -5,7 +5,7 @@ use crate::game::Blackjack;
 #[derive(Debug, Default)]
 pub struct App {
     pub games: Vec<Blackjack>,
-    pub current_game_index: usize,
+    pub selected_game: usize,
     pub should_quit: bool,
 }
 
@@ -14,14 +14,14 @@ impl App {
     pub const fn new() -> Self {
         Self {
             games: Vec::new(),
-            current_game_index: 0,
+            selected_game: 0,
             should_quit: false,
         }
     }
     
     #[must_use]
     pub fn current_game(&self) -> Option<&Blackjack> {
-        self.games.get(self.current_game_index)
+        self.games.get(self.selected_game)
     }
     
     pub fn simulate(&mut self) {
@@ -49,28 +49,28 @@ impl App {
     
     pub fn add_game(&mut self) {
         self.games.push(Blackjack::new());
-        self.current_game_index = self.games.len() - 1;
+        self.selected_game = self.games.len() - 1;
     }
     
     pub fn delete_game(&mut self) {
         if !self.games.is_empty() {
-            self.games.remove(self.current_game_index);
+            self.games.remove(self.selected_game);
             if !self.games.is_empty() {
-                self.current_game_index = (self.current_game_index + self.games.len() - 1) % self.games.len();
+                self.selected_game = (self.selected_game + self.games.len() - 1) % self.games.len();
             }
         }
     }
     
     pub fn cursor_up(&mut self) {
-        self.current_game_index = (self.current_game_index + self.games.len() - 1) % self.games.len();
+        self.selected_game = (self.selected_game + self.games.len() - 1) % self.games.len();
     }
     
     pub fn cursor_down(&mut self) {
-        self.current_game_index = (self.current_game_index + 1) % self.games.len();
+        self.selected_game = (self.selected_game + 1) % self.games.len();
     }
     
     pub fn input_current_game(&mut self, key: KeyCode) {
-        if let Some(game) = self.games.get_mut(self.current_game_index) {
+        if let Some(game) = self.games.get_mut(self.selected_game) {
             game.input(key);
         }
     }

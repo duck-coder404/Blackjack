@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "blackjack-core",
-    "blackjack-cli",
     "blackjack-gui",
 ]
 resolver = "2"

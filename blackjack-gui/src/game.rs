@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 use blackjack_core::basic_strategy;
-use blackjack_core::blackjack::{Input, Table, TransitionError};
+use blackjack_core::game::{Input, Table, Error};
 use blackjack_core::card::shoe::Shoe;
 use blackjack_core::rules::Rules;
 use blackjack_core::state::GameState;
@@ -11,7 +11,7 @@ pub struct Blackjack {
     pub table: Table,
     pub game_state: GameState,
     pub input_field: Option<InputField>,
-    pub last_error: Option<TransitionError>,
+    pub last_error: Option<Error>,
 }
 
 impl Blackjack {
@@ -50,9 +50,9 @@ impl Blackjack {
         }
     }
     
-    fn try_progress(&mut self, input: Option<Input>) -> Result<(), TransitionError> {
+    fn try_progress(&mut self, input: Option<Input>) -> Result<(), Error> {
         let current_state = core::mem::replace(&mut self.game_state, GameState::Betting);
-        match self.table.play(current_state, input) {
+        match self.table.progress(current_state, input) {
             Ok(next_state) => {
                 self.input_field = InputField::from_game(&next_state, &self.table);
                 self.game_state = next_state;

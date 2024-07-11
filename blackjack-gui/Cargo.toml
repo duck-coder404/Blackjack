@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-blackjack-core = { path = "../blackjack-core"}
+blackjack-core = { path = "../blackjack-core" }
 clap = { version = "4.5.1", features = ["derive"] }
 ratatui = "0.26.1"
 crossterm = { version = "0.27.0" }

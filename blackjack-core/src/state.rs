@@ -2,126 +2,110 @@ use crate::card::hand::{DealerHand, PlayerHand, PlayerTurn};
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum GameState {
-    /// We wait for the player to place a bet.
+    /// The player is placing a bet.
     #[default]
     Betting,
-    /// We wait for the dealer to deal the first card to the player.
+    /// The dealer is dealing the first card to the player.
     DealFirstPlayerCard { bet: u32 },
-    /// We wait for the dealer to deal the first card to themselves.
+    /// The dealer is dealing the first card to themselves.
     DealFirstDealerCard { player_hand: PlayerHand },
-    /// We wait for the dealer to deal the second card to the player.
+    /// The dealer is dealing the second card to the player.
     DealSecondPlayerCard {
         player_hand: PlayerHand,
         dealer_hand: DealerHand,
     },
-    /// We wait for the dealer to deal the second card to themselves.
+    /// The dealer deals the hole card to themselves.
     DealHoleCard {
         player_hand: PlayerHand,
         dealer_hand: DealerHand,
     },
-    /// The dealer has a 10 or higher showing and has offered the player to surrender early.
-    /// We wait for the player to decide whether to do so.
+    /// The player has a chance to surrender early (before the dealer checks for blackjack).
     OfferEarlySurrender {
         player_hand: PlayerHand,
         dealer_hand: DealerHand,
     },
-    /// The dealer has an ace showing and has offered the player insurance.
-    /// We wait for the player to place an insurance bet (could be 0).
+    /// The dealer offers the player insurance because they have an ace showing.
     OfferInsurance {
         player_hand: PlayerHand,
         dealer_hand: DealerHand,
     },
-    /// We wait for the dealer to check their hole card for blackjack.
+    /// The dealer checks their hole card to see if they have blackjack.
     CheckDealerHoleCard {
         player_hand: PlayerHand,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The dealer does not have blackjack and the player is playing their hand.
-    /// We wait for the player to make a move.
+    /// The player is choosing their action for their current hand.
     PlayPlayerTurn {
         player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The player has stood on their current hand.
-    /// We wait for dramatic effect.
-    Stand {
+    /// The player chooses to stand on their current hand.
+    PlayerStand {
         player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The player has hit on their current hand.
-    /// We wait for the dealer to deal the next card to the player's current hand.
-    Hit {
+    /// The player chooses to hit on their current hand.
+    PlayerHit {
         player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The player has doubled down on their current hand.
-    /// We wait for the dealer to deal the next card to the player's current hand.
-    Double {
+    /// The player chooses to double down on their current hand.
+    PlayerDouble {
         player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The player has decided to split their current hand.
-    /// We wait for the dealer to split the hand into two separate hands of one card each.
-    Split {
+    /// The player chooses to split their current hand.
+    PlayerSplit {
         player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The player's current hand has been split, and a new hand has been created.
-    /// Next, the dealer will deal a card to the hand which was split (not the new hand yet).
+    /// The dealer is dealing the first card to the newly split hand.
     DealFirstSplitCard {
         player_turn: PlayerTurn,
         new_hand: PlayerHand,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// We wait for the dealer to deal the second card to the new split hand.
-    /// Next, the new hand will become part of the player's hands.
+    /// The dealer has dealt the first card to the split hand, and is now dealing the second card.
     DealSecondSplitCard {
         player_turn: PlayerTurn,
         new_hand: PlayerHand,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The player has surrendered their current hand.
-    /// We wait for dramatic effect.
-    Surrender {
+    /// The player chooses to surrender (late) on their current hand.
+    PlayerSurrender {
         player_turn: PlayerTurn,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
     /// The dealer reveals their hole card.
-    /// We wait for the dealer to play their hand.
     RevealHoleCard {
         finished_hands: Vec<PlayerHand>,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The player has finished playing their hands.
-    /// We wait for the dealer to play.
+    /// The dealer draws a card.
     PlayDealerTurn {
         finished_hands: Vec<PlayerHand>,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The dealer has finished playing.
-    /// We wait for the dealer to pay out winnings.
+    /// The dealer has finished playing and the round is over.
     RoundOver {
         finished_hands: Vec<PlayerHand>,
         dealer_hand: DealerHand,
         insurance_bet: u32,
     },
-    /// The round is over.
-    /// We wait for the dealer to pay out winnings.
-    /// The first u32 is the total bet.
-    /// The second u32 is the total winnings.
+    /// The dealer is paying out the winnings.
     Payout { total_bet: u32, total_winnings: u32 },
-    /// We wait for the dealer to shuffle the shoe.
+    /// The dealer is shuffling the shoe.
     Shuffle,
     /// The game is over.
     GameOver,

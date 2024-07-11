@@ -63,36 +63,34 @@ impl Statistics {
 
 impl Display for Statistics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn pct(n: usize, d: usize) -> String {
-            if d == 0 {
+        fn pct(num: usize, div: usize) -> String {
+            if div == 0 {
                 "0.0".to_string()
             } else {
-                format!("{:.2}", n as f64 / d as f64 * 100.0)
+                format!("{:.2}", num as f64 / div as f64 * 100.0)
             }
         }
-        fn div(n: usize, d: usize) -> String {
-            if d == 0 {
+        fn div(num: usize, div: usize) -> String {
+            if div == 0 {
                 "0.0".to_string()
             } else {
-                format!("{:.2}", n as f64 / d as f64)
+                format!("{:.2}", num as f64 / div as f64)
             }
         }
 
-        writeln!(f, "{{")?;
-        writeln!(f, "  Turns Played: {}", self.turns_played)?;
-        writeln!(f, "  Hands Played: {}", self.hands_played)?;
-        writeln!(f, "  Total Bet: {} Chips", self.total_bet)?;
-        writeln!(f, "  Average Bet: {} Chips", div(self.total_bet, self.hands_played))?;
-        writeln!(f, "  Total Won: {} Chips", self.total_won)?;
-        writeln!(f, "  Average Win: {} Chips", div(self.total_won, self.hands_played))?;
-        writeln!(f, "  Wins: {} ({}%)", self.wins, pct(self.wins, self.hands_played))?;
-        writeln!(f, "  Pushes: {} ({}%)", self.pushes, pct(self.pushes, self.hands_played))?;
-        writeln!(f, "  Losses: {} ({}%)", self.losses, pct(self.losses, self.hands_played))?;
-        writeln!(f, "  Blackjacks: {} ({}%)", self.blackjacks, pct(self.blackjacks, self.hands_played))?;
-        writeln!(f, "  Busts: {} ({}%)", self.busts, pct(self.busts, self.hands_played))?;
-        writeln!(f, "  Dealer Blackjacks: {} ({}%)", self.dealer_blackjacks, pct(self.dealer_blackjacks, self.hands_played))?;
-        writeln!(f, "  Dealer Busts: {} ({}%)", self.dealer_busts, pct(self.dealer_busts, self.hands_played))?;
-        write!(f, "}}")?;
+        writeln!(f, "Turns Played: {}", self.turns_played)?;
+        writeln!(f, "Hands Played: {}", self.hands_played)?;
+        writeln!(f, "Total Bet: {} Chips", self.total_bet)?;
+        writeln!(f, "Average Bet: {} Chips", div(self.total_bet, self.hands_played))?;
+        writeln!(f, "Total Won: {} Chips", self.total_won)?;
+        writeln!(f, "Average Win: {} Chips", div(self.total_won, self.hands_played))?;
+        writeln!(f, "Wins: {} ({}%)", self.wins, pct(self.wins, self.hands_played))?;
+        writeln!(f, "Pushes: {} ({}%)", self.pushes, pct(self.pushes, self.hands_played))?;
+        writeln!(f, "Losses: {} ({}%)", self.losses, pct(self.losses, self.hands_played))?;
+        writeln!(f, "Blackjacks: {} ({}%)", self.blackjacks, pct(self.blackjacks, self.hands_played))?;
+        writeln!(f, "Busts: {} ({}%)", self.busts, pct(self.busts, self.hands_played))?;
+        writeln!(f, "Dealer Blackjacks: {} ({}%)", self.dealer_blackjacks, pct(self.dealer_blackjacks, self.hands_played))?;
+        writeln!(f, "Dealer Busts: {} ({}%)", self.dealer_busts, pct(self.dealer_busts, self.hands_played))?;
 
         Ok(())
     }

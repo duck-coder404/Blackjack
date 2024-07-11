@@ -1,3 +1,5 @@
+//! This module contains the types and functions for working with cards in a game of blackjack.
+
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,7 +66,7 @@ impl Rank {
 }
 
 /// A card is a combination of a rank and a suit.
-/// Do not implement Copy for this type, as it is important that cards are not duplicated.
+/// Copy is intentionally not derived to reflect the nature of physical cards.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Card {
     pub rank: Rank,
@@ -101,14 +103,14 @@ impl Card {
             10 => Rank::Queen,
             11 => Rank::King,
             12 => Rank::Ace,
-            _ => panic!("Invalid ordinal"),
+            _ => panic!("Invalid ordinal {}", ordinal),
         };
         let suit = match ordinal % 4 {
             0 => Suit::Clubs,
             1 => Suit::Diamonds,
             2 => Suit::Hearts,
             3 => Suit::Spades,
-            _ => panic!("Invalid ordinal"),
+            _ => unreachable!(),
         };
         Self { rank, suit }
     }
@@ -194,7 +196,7 @@ pub mod hand {
         pub value: Value,
         /// The status of this hand
         pub status: Status,
-        /// The cards in this hand
+        /// The cards in this hand (non-empty at all times)
         cards: Vec<Card>,
         /// Whether the dealer stands or hits on soft 17
         soft_17_action: DealerSoft17Action,
@@ -218,7 +220,7 @@ pub mod hand {
     }
 
     impl DealerHand {
-        /// Creates a new dealer hand with the given card and hit-on-soft-17 setting.
+        /// Creates a new dealer hand with the given card and soft 17 behavior.
         #[must_use]
         pub fn new(card: Card, soft_17_action: DealerSoft17Action) -> Self {
             Self {
@@ -251,7 +253,7 @@ pub mod hand {
         pub value: Value,
         /// The status of this hand
         pub status: Status,
-        /// The cards in this hand
+        /// The cards in this hand (non-empty at all times)
         pub cards: Vec<Card>,
         /// The player's winnings on this hand
         pub winnings: u32,
@@ -322,14 +324,7 @@ pub mod hand {
             debug_assert!(self.is_pair(), "cannot split hand that is not a pair");
             let split_card = self.cards.pop().expect("Hand must be a pair"); // Remove the second card
             self.value = Value::from(&self.cards[0]); // The value of this hand is now the first card
-                                                      // Create a new hand with the second card
-            Self {
-                bet: self.bet, // The new hand has the same bet
-                value: Value::from(&split_card),
-                status: Status::InPlay,
-                cards: vec![split_card],
-                winnings: 0,
-            }
+            Self::new(split_card, self.bet) // Create a new hand with the second card
         }
 
         /// The player surrenders this hand.
@@ -368,7 +363,7 @@ pub mod hand {
                 (Status::Blackjack, Status::Blackjack) => self.payout_push(), // Blackjack push
                 (Status::Blackjack, _) => self.payout_blackjack(blackjack_payout), // Blackjack win
                 (_, Status::Blackjack) | (Status::Bust, _) => self.payout_loss(), // Dealer blackjack or player bust
-                (_, Status::Bust) => self.payout_win(),                           // Dealer bust
+                (_, Status::Bust) => self.payout_win(), // Dealer bust
                 _ => match self.value.total.cmp(&dealer_hand.value.total) {
                     Ordering::Greater => self.payout_win(), // Player win
                     Ordering::Equal => self.payout_push(),  // Push
@@ -412,17 +407,17 @@ pub mod hand {
     /// Finished hands are hands that are no longer in play.
     #[derive(Debug, PartialEq, Eq)]
     pub struct PlayerTurn {
-        pending: Vec<PlayerHand>,
-        pub current: PlayerHand,
-        finished: Vec<PlayerHand>,
+        pending_hands: Vec<PlayerHand>,
+        pub current_hand: PlayerHand,
+        finished_hands: Vec<PlayerHand>,
     }
 
     impl From<PlayerHand> for PlayerTurn {
         fn from(hand: PlayerHand) -> Self {
             Self {
-                pending: Vec::new(),
-                current: hand,
-                finished: Vec::with_capacity(1),
+                pending_hands: Vec::new(),
+                current_hand: hand,
+                finished_hands: Vec::with_capacity(1),
             }
         }
     }
@@ -431,56 +426,59 @@ pub mod hand {
         /// Returns the total number of hands belonging to the player.
         /// This includes all finished hands, the current hand, and any pending hands.
         pub fn hands(&self) -> u8 {
-            self.finished.len() as u8 + 1 + self.pending.len() as u8
+            self.finished_hands.len() as u8 + 1 + self.pending_hands.len() as u8
         }
 
         /// Returns the index of the current hand, starting at 0 for the original hand.
-        pub fn current_index(&self) -> u8 {
-            self.finished.len() as u8
+        pub fn current_hand_index(&self) -> u8 {
+            self.finished_hands.len() as u8
         }
 
-        /// Defer the provided hand to be played after the current hand.
+        /// Defer the provided hand to be played later.
         pub fn defer(&mut self, hand: PlayerHand) {
-            self.pending.push(hand);
+            self.pending_hands.push(hand);
         }
 
         /// Continues playing the current hand if it is in play.
         /// If the current hand is finished, it is moved to the finished hands
         /// and the next pending hand becomes the current hand.
         /// If there are no more pending hands, the finished hands are returned.
-        /// # Errors
-        /// If the current hand is finished and there are no more pending hands,
-        /// the finished hands are returned as an error.
         pub fn continue_playing(mut self) -> Result<Self, Vec<PlayerHand>> {
-            if self.current.status == Status::InPlay {
+            if self.current_hand.status == Status::InPlay {
                 Ok(self)
             } else {
-                self.finished.push(self.current);
-                while let Some(hand) = self.pending.pop() {
+                self.finished_hands.push(self.current_hand);
+                while let Some(hand) = self.pending_hands.pop() {
                     if hand.status == Status::InPlay {
-                        self.current = hand;
+                        self.current_hand = hand;
                         return Ok(self);
                     }
-                    self.finished.push(hand);
+                    self.finished_hands.push(hand);
                 }
-                Err(self.finished)
+                Err(self.finished_hands)
             }
         }
     }
 
-    /// Tests whether a hand consists of cards with the specified values.
+    /// Tests whether a hand is composed of cards with the given values.
+    /// The multiset of card values in the hand must be equal to the multiset of values provided.
+    /// 
     /// # Example
     /// ```
     /// use blackjack_core::card::{Card, Rank, Suit};
     /// use blackjack_core::card::hand::PlayerHand;
     /// use blackjack_core::composed;
+    /// 
     /// let mut hand = PlayerHand::new(Card { rank: Rank::Ten, suit: Suit::Clubs }, 100);
     /// hand += Card { rank: Rank::Five, suit: Suit::Diamonds };
+    /// 
     /// assert!(composed!(hand => 10, 5));
-    /// assert!(!composed!(hand => 9, 5));
-    /// assert!(composed!(hand => 9, 5 | 10, 5 | 10, 6));
-    /// assert!(!composed!(hand => 11, 5, 2));
-    /// assert!(!composed!(hand => 11));
+    /// assert!(composed!(hand => 5, 10));
+    /// assert!(!composed!(hand => 5));
+    /// assert!(!composed!(hand => 10));
+    /// assert!(!composed!(hand => 10, 5, 5));
+    /// assert!(composed!(hand => 9, 5; 10, 5));
+    /// assert!(composed!(hand => 10, 5; 9, 5));
     /// ```
     #[macro_export]
     macro_rules! composed {
@@ -494,15 +492,15 @@ pub mod hand {
                 None => false,
             })* && values.is_empty()
         });
-        ($hand:ident => $($($x:expr),+) | +) => ({
+        ($hand:ident => $($($x:expr),+);+) => ({
             false $(|| composed!($hand => $($x),*))*
         });
     }
 }
 
 pub mod shoe {
-    use rand::{Rng, thread_rng};
-    use rand::distributions::WeightedIndex;
+    use rand::thread_rng;
+    use rand_distr::{Distribution, WeightedTreeIndex};
 
     use crate::card::Card;
 
@@ -511,13 +509,12 @@ pub mod shoe {
     pub struct Shoe {
         /// The number of decks in the shoe
         pub decks: u8,
-        /// Weighted distribution to draw random cards from the shoe without replacement.
-        dist: WeightedIndex<u16>,
-        /// The number of each card remaining in the shoe, indexed by ordinal
-        /// This is initialized to the number of decks in the shoe
-        remaining: [u16; 52],
+        /// The number of cards that have been drawn from the shoe
+        pub cards_drawn: u16,
         /// The proportion of cards to play before shuffling
-        shuffle_threshold: f32,
+        pub max_penetration: f32,
+        /// Weighted distribution to draw random cards from the shoe without replacement.
+        dist: WeightedTreeIndex<u8>,
     }
 
     impl Shoe {
@@ -528,13 +525,11 @@ pub mod shoe {
         /// Panics if the number of decks is 0
         #[must_use]
         pub fn new(decks: u8, shuffle_threshold: f32) -> Self {
-            let remaining = [u16::from(decks); 52]; // Start with all cards present
-            let dist = WeightedIndex::new(remaining).unwrap();
             Self {
                 decks,
-                dist,
-                remaining,
-                shuffle_threshold,
+                cards_drawn: 0,
+                max_penetration: shuffle_threshold,
+                dist: WeightedTreeIndex::new([decks; 52]).unwrap(),
             }
         }
 
@@ -542,12 +537,13 @@ pub mod shoe {
         /// The card is removed from the shoe, and the distribution is updated to reflect the new weight.
         /// If the last card is drawn, the shoe is shuffled.
         pub fn draw_card(&mut self) -> Card {
-            let ordinal = thread_rng().sample(&self.dist);
-            self.remaining[ordinal] -= 1; // Remove the card from the shoe
-            let new_weight = self.remaining[ordinal];
+            let ordinal = self.dist.sample(&mut thread_rng());
+            self.cards_drawn += 1;
+            let new_weight = self.dist.get(ordinal) - 1;
             // Update the distribution to reflect the new weight of the removed card
-            if self.dist.update_weights(&[(ordinal, &new_weight)]).is_err() {
+            if self.dist.update(ordinal, new_weight).is_err() {
                 // The update failed, so we must have drawn the last card
+                debug_assert_eq!(self.cards_drawn, self.decks as u16 * 52, "last card drawn");
                 self.shuffle();
             }
             Card::from_ordinal(ordinal)
@@ -556,20 +552,19 @@ pub mod shoe {
         /// Checks if the shoe needs to be shuffled.
         #[must_use]
         pub fn needs_shuffle(&self) -> bool {
-            let shoe_size = u16::from(self.decks) * 52;
-            let cards_played = shoe_size - self.remaining.iter().sum::<u16>();
-            let penetration = f32::from(cards_played) / f32::from(shoe_size);
-            penetration >= self.shuffle_threshold
+            let penetration = f32::from(self.cards_drawn) / f32::from(self.decks as u16 * 52);
+            penetration >= self.max_penetration
         }
 
         /// Shuffles the shoe.
         /// All cards are returned to the shoe, and the distribution is updated to reflect the new weights.
+        ///
         /// # Panics
         ///
         /// Panics if the number of decks is 0
         pub fn shuffle(&mut self) {
-            self.remaining = [u16::from(self.decks); 52];
-            self.dist = WeightedIndex::new(self.remaining).unwrap();
+            self.cards_drawn = 0;
+            self.dist = WeightedTreeIndex::new([self.decks; 52]).unwrap();
         }
     }
 }

@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 
-use blackjack_core::blackjack::{HandAction, Input, Table};
+use blackjack_core::game::{HandAction, Input, Table};
 use blackjack_core::state::GameState;
 
 #[derive(Debug)]
@@ -27,7 +27,7 @@ impl InputField {
                 if table.check_split_allowed(player_turn).is_ok() {
                     allowed_actions.push(HandAction::Split);
                 }
-                if table.check_surrender_allowed(&player_turn.current).is_ok() {
+                if table.check_surrender_allowed(&player_turn.current_hand).is_ok() {
                     allowed_actions.push(HandAction::Surrender);
                 }
                 Some(Self::PlayHand(allowed_actions))
