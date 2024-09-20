@@ -128,25 +128,25 @@ impl Table {
     /// Returns Err with the same state if the game could not progress.
     #[rustfmt::skip]
     pub fn progress(&mut self, state: GameState, input: Option<Input>) -> ProgressResult {
-        match (state, input) {
-            (GameState::Betting, input) => {
+        match state {
+            GameState::Betting => {
                 if let Some(Input::Bet(bet)) = input {
                     self.bet(bet)
                 } else {
                     Err((GameState::Betting, Error::WrongInput))
                 }
             }
-            (GameState::DealFirstPlayerCard { bet }, _) => Ok(self.deal_first_player_card(bet)),
-            (GameState::DealFirstDealerCard { player_hand }, _) => {
+            GameState::DealFirstPlayerCard { bet } => Ok(self.deal_first_player_card(bet)),
+            GameState::DealFirstDealerCard { player_hand } => {
                 Ok(self.deal_first_dealer_card(player_hand))
             },
-            (GameState::DealSecondPlayerCard { player_hand, dealer_hand }, _) => {
+            GameState::DealSecondPlayerCard { player_hand, dealer_hand } => {
                 Ok(self.deal_second_player_card(player_hand, dealer_hand))
             },
-            (GameState::DealHoleCard { player_hand, dealer_hand }, _) => {
+            GameState::DealHoleCard { player_hand, dealer_hand } => {
                 Ok(self.deal_hole_card(player_hand, dealer_hand))
             },
-            (GameState::OfferEarlySurrender { player_hand, dealer_hand }, input) => {
+            GameState::OfferEarlySurrender { player_hand, dealer_hand } => {
                 if let Some(Input::Choice(early_surrender)) = input {
                     Ok(self.choose_early_surrender(player_hand, dealer_hand, early_surrender))
                 } else {
@@ -159,7 +159,7 @@ impl Table {
                     ))
                 }
             }
-            (GameState::OfferInsurance { player_hand, dealer_hand }, input) => {
+            GameState::OfferInsurance { player_hand, dealer_hand } => {
                 if let Some(Input::Bet(insurance_bet)) = input {
                     self.bet_insurance(player_hand, dealer_hand, insurance_bet)
                 } else {
@@ -172,10 +172,10 @@ impl Table {
                     ))
                 }
             }
-            (GameState::CheckDealerHoleCard { player_hand, dealer_hand, insurance_bet }, _) => {
+            GameState::CheckDealerHoleCard { player_hand, dealer_hand, insurance_bet } => {
                 Ok(self.check_dealer_hole_card(player_hand, dealer_hand, insurance_bet))
             },
-            (GameState::PlayPlayerTurn { player_turn, dealer_hand, insurance_bet }, input) => {
+            GameState::PlayPlayerTurn { player_turn, dealer_hand, insurance_bet } => {
                 if let Some(Input::Action(action)) = input {
                     self.play_player_turn(player_turn, dealer_hand, insurance_bet, action)
                 } else {
@@ -189,41 +189,41 @@ impl Table {
                     ))
                 }
             }
-            (GameState::PlayerStand { player_turn, dealer_hand, insurance_bet }, _) => {
+            GameState::PlayerStand { player_turn, dealer_hand, insurance_bet } => {
                 Ok(self.stand(player_turn, dealer_hand, insurance_bet))
             },
-            (GameState::PlayerHit { player_turn, dealer_hand, insurance_bet }, _) => {
+            GameState::PlayerHit { player_turn, dealer_hand, insurance_bet } => {
                 Ok(self.hit(player_turn, dealer_hand, insurance_bet))
             },
-            (GameState::PlayerDouble { player_turn, dealer_hand, insurance_bet }, _) => {
+            GameState::PlayerDouble { player_turn, dealer_hand, insurance_bet } => {
                 Ok(self.double(player_turn, dealer_hand, insurance_bet))
             },
-            (GameState::PlayerSplit { player_turn, dealer_hand, insurance_bet }, _) => {
+            GameState::PlayerSplit { player_turn, dealer_hand, insurance_bet } => {
                 Ok(self.split(player_turn, dealer_hand, insurance_bet))
             },
-            (GameState::DealFirstSplitCard { player_turn, new_hand, dealer_hand, insurance_bet }, _) => {
+            GameState::DealFirstSplitCard { player_turn, new_hand, dealer_hand, insurance_bet } => {
                 Ok(self.deal_first_split_card(player_turn, new_hand, dealer_hand, insurance_bet))
             },
-            (GameState::DealSecondSplitCard { player_turn, new_hand, dealer_hand, insurance_bet }, _) => {
+            GameState::DealSecondSplitCard { player_turn, new_hand, dealer_hand, insurance_bet } => {
                 Ok(self.deal_second_split_card(player_turn, new_hand, dealer_hand, insurance_bet))
             },
-            (GameState::PlayerSurrender { player_turn, dealer_hand, insurance_bet }, _) => {
+            GameState::PlayerSurrender { player_turn, dealer_hand, insurance_bet } => {
                 Ok(self.late_surrender(player_turn, dealer_hand, insurance_bet))
             },
-            (GameState::RevealHoleCard { finished_hands, dealer_hand, insurance_bet }, _) => {
+            GameState::RevealHoleCard { finished_hands, dealer_hand, insurance_bet } => {
                 Ok(self.play_dealer_turn_or_end_round(finished_hands, dealer_hand, insurance_bet))
             },
-            (GameState::PlayDealerTurn { finished_hands, dealer_hand, insurance_bet }, _) => {
+            GameState::PlayDealerTurn { finished_hands, dealer_hand, insurance_bet } => {
                 Ok(self.play_dealer_turn(finished_hands, dealer_hand, insurance_bet))
             },
-            (GameState::RoundOver { finished_hands, dealer_hand, insurance_bet }, _) => {
+            GameState::RoundOver { finished_hands, dealer_hand, insurance_bet } => {
                 Ok(self.end_round(finished_hands, dealer_hand, insurance_bet))
             },
-            (GameState::Payout { total_winnings, .. }, _) => {
+            GameState::Payout { total_winnings, .. } => {
                 Ok(self.pay_out_winnings(total_winnings))
             }
-            (GameState::Shuffle, _) => Ok(self.shuffle_dispenser()),
-            (GameState::GameOver, _) => Err((GameState::GameOver, Error::WrongInput)),
+            GameState::Shuffle => Ok(self.shuffle_dispenser()),
+            GameState::GameOver => Err((GameState::GameOver, Error::WrongInput)),
         }
     }
 
