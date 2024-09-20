@@ -203,8 +203,7 @@ pub mod hand {
     }
 
     impl AddAssign<Card> for DealerHand {
-        /// Adds a card to the dealer's hand, updating the value and announcing the card.
-        /// If this is the dealer's second card, it is not announced.
+        /// Adds a card to the dealer's hand.
         fn add_assign(&mut self, rhs: Card) {
             debug_assert_eq!(self.status, Status::InPlay, "cannot add to finished hand");
             self.value += &rhs;
@@ -260,7 +259,7 @@ pub mod hand {
     }
 
     impl AddAssign<Card> for PlayerHand {
-        /// Adds a card to the player's hand, updating the value and announcing the card.
+        /// Adds a card to the player's hand.
         fn add_assign(&mut self, rhs: Card) {
             debug_assert_eq!(self.status, Status::InPlay, "cannot add to finished hand");
             self.value += &rhs;
