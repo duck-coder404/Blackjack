@@ -1,4 +1,4 @@
-#![allow(clippy::result_large_err)]
+#![warn(clippy::result_large_err)]
 
 //! The core logic of the game.
 
@@ -41,8 +41,8 @@ pub struct Table {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BetError {
-    BetTooLow,
-    BetTooHigh,
+    TooLow,
+    TooHigh,
     CantAfford,
 }
 
@@ -56,7 +56,7 @@ pub enum DoubleError {
 #[derive(Debug, PartialEq, Eq)]
 pub enum SplitError {
     CantAfford,
-    NotPair,
+    NotAPair,
     MaxSplitsReached,
     SplitAcesNotAllowed,
 }
@@ -81,8 +81,8 @@ impl fmt::Display for Error {
         match self {
             Self::WrongInput => write!(f, "Wrong input"),
             Self::BetError(err) => match err {
-                BetError::BetTooLow => write!(f, "Bet too low"),
-                BetError::BetTooHigh => write!(f, "Bet too high"),
+                BetError::TooLow => write!(f, "Bet too low"),
+                BetError::TooHigh => write!(f, "Bet too high"),
                 BetError::CantAfford => write!(f, "Can't afford bet"),
             },
             Self::DoubleError(err) => match err {
@@ -94,7 +94,7 @@ impl fmt::Display for Error {
             },
             Self::SplitError(err) => match err {
                 SplitError::CantAfford => write!(f, "Can't afford split"),
-                SplitError::NotPair => write!(f, "Not a pair"),
+                SplitError::NotAPair => write!(f, "Not a pair"),
                 SplitError::MaxSplitsReached => write!(f, "Max splits reached"),
                 SplitError::SplitAcesNotAllowed => write!(f, "Split aces not allowed"),
             },
@@ -237,7 +237,7 @@ impl Table {
             Err(DoubleError::NotTwoCards)
         } else if player_turn.current_hand.bet > self.chips {
             Err(DoubleError::CantAfford)
-        } else if player_turn.current_hand_index() != 0 && !self.rules.double_after_split {
+        } else if player_turn.hands() > 1 && !self.rules.double_after_split {
             Err(DoubleError::DoubleAfterSplitNotAllowed)
         } else {
             Ok(())
@@ -251,7 +251,7 @@ impl Table {
     /// Returns an error containing the reason why the player cannot split.
     pub fn check_split_allowed(&self, player_turn: &PlayerTurn) -> Result<(), SplitError> {
         if !player_turn.current_hand.is_pair() {
-            Err(SplitError::NotPair)
+            Err(SplitError::NotAPair)
         } else if player_turn.current_hand.bet > self.chips {
             Err(SplitError::CantAfford)
         } else if self
@@ -293,10 +293,10 @@ impl Table {
         }
         match (self.rules.min_bet, self.rules.max_bet) {
             (Some(min), _) if bet < min => {
-                Err((GameState::Betting, Error::BetError(BetError::BetTooLow)))
+                Err((GameState::Betting, Error::BetError(BetError::TooLow)))
             }
             (_, Some(max)) if bet > max => {
-                Err((GameState::Betting, Error::BetError(BetError::BetTooHigh)))
+                Err((GameState::Betting, Error::BetError(BetError::TooHigh)))
             }
             _ if bet > self.chips => {
                 Err((GameState::Betting, Error::BetError(BetError::CantAfford)))
@@ -444,7 +444,7 @@ impl Table {
                     player_hand,
                     dealer_hand,
                 },
-                Error::BetError(BetError::BetTooHigh),
+                Error::BetError(BetError::TooHigh),
             ))
         } else if insurance_bet > self.chips {
             Err((
@@ -859,11 +859,11 @@ mod tests {
         );
         assert_eq!(
             table.bet(101),
-            Err((GameState::Betting, Error::BetError(BetError::BetTooHigh)))
+            Err((GameState::Betting, Error::BetError(BetError::TooHigh)))
         );
         assert_eq!(
             table.bet(0),
-            Err((GameState::Betting, Error::BetError(BetError::BetTooLow)))
+            Err((GameState::Betting, Error::BetError(BetError::TooLow)))
         );
         assert_eq!(table.bet(1), Ok(GameState::DealFirstPlayerCard { bet: 1 }));
         assert_eq!(
