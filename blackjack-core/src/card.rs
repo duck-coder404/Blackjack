@@ -428,11 +428,6 @@ pub mod hand {
             self.finished_hands.len() as u8 + 1 + self.pending_hands.len() as u8
         }
 
-        /// Returns the index of the current hand, starting at 0 for the original hand.
-        pub fn current_hand_index(&self) -> u8 {
-            self.finished_hands.len() as u8
-        }
-
         /// Defer the provided hand to be played later.
         pub fn defer(&mut self, hand: PlayerHand) {
             self.pending_hands.push(hand);
