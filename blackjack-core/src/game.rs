@@ -233,9 +233,9 @@ impl Table {
     /// # Errors
     /// Returns an error containing the reason why the player cannot double down.
     pub fn check_double_allowed(&self, player_turn: &PlayerTurn) -> Result<(), DoubleError> {
-        if player_turn.current_hand.size() != 2 {
+        if player_turn.current_hand().size() != 2 {
             Err(DoubleError::NotTwoCards)
-        } else if player_turn.current_hand.bet > self.chips {
+        } else if player_turn.current_hand().bet > self.chips {
             Err(DoubleError::CantAfford)
         } else if player_turn.hands() > 1 && !self.rules.double_after_split {
             Err(DoubleError::DoubleAfterSplitNotAllowed)
@@ -250,9 +250,9 @@ impl Table {
     /// # Errors
     /// Returns an error containing the reason why the player cannot split.
     pub fn check_split_allowed(&self, player_turn: &PlayerTurn) -> Result<(), SplitError> {
-        if !player_turn.current_hand.is_pair() {
+        if !player_turn.current_hand().is_pair() {
             Err(SplitError::NotAPair)
-        } else if player_turn.current_hand.bet > self.chips {
+        } else if player_turn.current_hand().bet > self.chips {
             Err(SplitError::CantAfford)
         } else if self
             .rules
@@ -260,7 +260,7 @@ impl Table {
             .map_or(false, |max| player_turn.hands() > max)
         {
             Err(SplitError::MaxSplitsReached)
-        } else if player_turn.current_hand.value.soft && !self.rules.split_aces {
+        } else if player_turn.current_hand().value.soft && !self.rules.split_aces {
             Err(SplitError::SplitAcesNotAllowed)
         } else {
             Ok(())
@@ -522,7 +522,7 @@ impl Table {
             }),
             HandAction::Double if self.fast_forward => {
                 // Simulated moves should already be valid, so we don't need to check them
-                self.chips -= player_turn.current_hand.bet;
+                self.chips -= player_turn.current_hand().bet;
                 Ok(self.double(player_turn, dealer_hand, insurance_bet))
             }
             HandAction::Double => {
@@ -536,7 +536,7 @@ impl Table {
                         Error::DoubleError(err),
                     ))
                 } else {
-                    self.chips -= player_turn.current_hand.bet;
+                    self.chips -= player_turn.current_hand().bet;
                     Ok(GameState::PlayerDouble {
                         player_turn,
                         dealer_hand,
@@ -546,7 +546,7 @@ impl Table {
             }
             HandAction::Split if self.fast_forward => {
                 // Simulated moves should already be valid, so we don't need to check them
-                self.chips -= player_turn.current_hand.bet;
+                self.chips -= player_turn.current_hand().bet;
                 Ok(self.split(player_turn, dealer_hand, insurance_bet))
             }
             HandAction::Split => {
@@ -560,7 +560,7 @@ impl Table {
                         Error::SplitError(err),
                     ))
                 } else {
-                    self.chips -= player_turn.current_hand.bet;
+                    self.chips -= player_turn.current_hand().bet;
                     Ok(GameState::PlayerSplit {
                         player_turn,
                         dealer_hand,
@@ -573,7 +573,7 @@ impl Table {
                 Ok(self.late_surrender(player_turn, dealer_hand, insurance_bet))
             }
             HandAction::Surrender => {
-                if let Err(err) = self.check_surrender_allowed(&player_turn.current_hand) {
+                if let Err(err) = self.check_surrender_allowed(player_turn.current_hand()) {
                     Err((
                         GameState::PlayPlayerTurn {
                             player_turn,
@@ -601,7 +601,7 @@ impl Table {
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_turn.current_hand += self.shoe.draw_card();
+        *player_turn.current_hand_mut() += self.shoe.draw_card();
         self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 
@@ -613,7 +613,7 @@ impl Table {
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_turn.current_hand.stand();
+        player_turn.current_hand_mut().stand();
         self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 
@@ -625,7 +625,7 @@ impl Table {
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_turn.current_hand.double(self.shoe.draw_card());
+        player_turn.current_hand_mut().double(self.shoe.draw_card());
         self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 
@@ -637,7 +637,7 @@ impl Table {
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        let new_hand = player_turn.current_hand.split();
+        let new_hand = player_turn.current_hand_mut().split();
         if self.fast_forward {
             self.deal_first_split_card(player_turn, new_hand, dealer_hand, insurance_bet)
         } else {
@@ -659,7 +659,7 @@ impl Table {
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_turn.current_hand += self.shoe.draw_card();
+        *player_turn.current_hand_mut() += self.shoe.draw_card();
         if self.fast_forward {
             self.deal_second_split_card(player_turn, new_hand, dealer_hand, insurance_bet)
         } else {
@@ -695,7 +695,7 @@ impl Table {
         dealer_hand: DealerHand,
         insurance_bet: u32,
     ) -> GameState {
-        player_turn.current_hand.surrender();
+        player_turn.current_hand_mut().surrender();
         self.play_player_turn_or_go_to_dealer_turn(player_turn, dealer_hand, insurance_bet)
     }
 

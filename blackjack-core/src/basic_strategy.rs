@@ -83,10 +83,10 @@ enum PreferredAction {
 /// Assuming 4-8 decks
 #[must_use]
 pub fn play_hand(table: &Table, player_hands: &PlayerTurn, dealer_hand: &DealerHand) -> HandAction {
-    let preferred = match (player_hands.current_hand.value.soft, table.check_split_allowed(player_hands).is_ok()) {
-        (false, false) => make_move_hard(table, &player_hands.current_hand, dealer_hand),
-        (true, false) => make_move_soft(&player_hands.current_hand, dealer_hand),
-        (_, true) => make_move_splittable(&player_hands.current_hand, dealer_hand),
+    let preferred = match (player_hands.current_hand().value.soft, table.check_split_allowed(player_hands).is_ok()) {
+        (false, false) => make_move_hard(table, &player_hands.current_hand(), dealer_hand),
+        (true, false) => make_move_soft(&player_hands.current_hand(), dealer_hand),
+        (_, true) => make_move_splittable(&player_hands.current_hand(), dealer_hand),
     };
     match preferred {
         PreferredAction::Stand => HandAction::Stand,
@@ -107,21 +107,21 @@ pub fn play_hand(table: &Table, player_hands: &PlayerTurn, dealer_hand: &DealerH
             }
         }
         PreferredAction::SurrenderOrHit => {
-            if table.check_surrender_allowed(&player_hands.current_hand).is_ok() {
+            if table.check_surrender_allowed(&player_hands.current_hand()).is_ok() {
                 HandAction::Surrender
             } else {
                 HandAction::Hit
             }
         }
         PreferredAction::SurrenderOrStand => {
-            if table.check_surrender_allowed(&player_hands.current_hand).is_ok() {
+            if table.check_surrender_allowed(&player_hands.current_hand()).is_ok() {
                 HandAction::Surrender
             } else {
                 HandAction::Stand
             }
         }
         PreferredAction::SurrenderOrSplit => {
-            if table.check_surrender_allowed(&player_hands.current_hand).is_ok() {
+            if table.check_surrender_allowed(&player_hands.current_hand()).is_ok() {
                 HandAction::Surrender
             } else {
                 HandAction::Split

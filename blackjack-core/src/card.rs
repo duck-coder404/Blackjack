@@ -402,54 +402,62 @@ pub mod hand {
 
     /// All the player's hands in a round of blackjack.
     /// This always starts with just one hand, but the player might split it into arbitrarily many.
-    /// Pending hands are hands that have been split from the current hand to be played later.
-    /// Finished hands are hands that are no longer in play.
+    /// Split hands are pushed onto the vec.
+    /// The player plays each hand in turn, and the hands are resolved in the order they were split.
     #[derive(Debug, PartialEq, Eq)]
     pub struct PlayerTurn {
-        pending_hands: Vec<PlayerHand>,
-        pub current_hand: PlayerHand,
-        finished_hands: Vec<PlayerHand>,
+        /// The hands in the player's turn, initially just their starting hand.
+        /// This will only grow in size if the player splits.
+        hands: Vec<PlayerHand>,
+        /// The index of the hand the player is currently playing.
+        /// u8 is more than sufficient for the number of hands the player could realistically split
+        current_hand_index: usize,
     }
 
+    /// Convenience implementation to convert a player hand into a player turn.
     impl From<PlayerHand> for PlayerTurn {
         fn from(hand: PlayerHand) -> Self {
             Self {
-                pending_hands: Vec::new(),
-                current_hand: hand,
-                finished_hands: Vec::with_capacity(1),
+                hands: vec![hand],
+                current_hand_index: 0,
             }
         }
     }
 
     impl PlayerTurn {
+        /// Returns a mutable reference to the current hand.
+        pub fn current_hand_mut(&mut self) -> &mut PlayerHand {
+            &mut self.hands[self.current_hand_index]
+        }
+        /// Returns a reference to the current hand.
+        pub fn current_hand(&self) -> &PlayerHand {
+            &self.hands[self.current_hand_index]
+        }
         /// Returns the total number of hands belonging to the player.
-        /// This includes all finished hands, the current hand, and any pending hands.
         pub fn hands(&self) -> u8 {
-            self.finished_hands.len() as u8 + 1 + self.pending_hands.len() as u8
+            self.hands.len() as u8
         }
 
-        /// Defer the provided hand to be played later.
+        /// Adds a new (split) hand to the player's turn.
+        /// The player may not play this hand immediately, so it is deferred until later.
         pub fn defer(&mut self, hand: PlayerHand) {
-            self.pending_hands.push(hand);
+            self.hands.push(hand);
         }
 
-        /// Continues playing the current hand if it is in play.
-        /// If the current hand is finished, it is moved to the finished hands
-        /// and the next pending hand becomes the current hand.
-        /// If there are no more pending hands, the finished hands are returned.
+        /// Continue playing on the next hand which is still in-play.
+        /// If the current hand is still in-play, then nothing happens,
+        /// otherwise the index is incremented until a hand is found that is still in-play.
+        /// This ensures that finished hands are not played again, and we eventually
+        /// play all hands to completion in the order they were split.
+        /// If there are no more hands to play, Self is deconstructed and Err(hands) is returned.
         pub fn continue_playing(mut self) -> Result<Self, Vec<PlayerHand>> {
-            if self.current_hand.status == Status::InPlay {
+            if let Some(position) = self.hands.iter()
+                .skip(self.current_hand_index)
+                .position(|hand| hand.status == Status::InPlay) {
+                self.current_hand_index += position;
                 Ok(self)
             } else {
-                self.finished_hands.push(self.current_hand);
-                while let Some(hand) = self.pending_hands.pop() {
-                    if hand.status == Status::InPlay {
-                        self.current_hand = hand;
-                        return Ok(self);
-                    }
-                    self.finished_hands.push(hand);
-                }
-                Err(self.finished_hands)
+                Err(self.hands)
             }
         }
     }
