@@ -27,7 +27,7 @@ impl InputField {
                 if table.check_split_allowed(player_turn).is_ok() {
                     allowed_actions.push(HandAction::Split);
                 }
-                if table.check_surrender_allowed(&player_turn.current_hand).is_ok() {
+                if table.check_surrender_allowed(&player_turn.current_hand()).is_ok() {
                     allowed_actions.push(HandAction::Surrender);
                 }
                 Some(Self::PlayHand(allowed_actions))
