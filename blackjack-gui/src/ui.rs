@@ -153,42 +153,42 @@ fn game_text(game_state: &GameState) -> String {
         GameState::PlayPlayerTurn { player_turn, dealer_hand, .. } => {
             format!(
                 "PlayPlayerTurn\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_turn.current_hand().value,
                 dealer_hand.showing(),
             )
         }
         GameState::PlayerStand { player_turn, dealer_hand, .. } => {
             format!(
                 "Stand\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_turn.current_hand().value,
                 dealer_hand.showing(),
             )
         }
         GameState::PlayerHit { player_turn, dealer_hand, .. } => {
             format!(
                 "Hit\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_turn.current_hand().value,
                 dealer_hand.showing(),
             )
         }
         GameState::PlayerDouble { player_turn, dealer_hand, .. } => {
             format!(
                 "Double\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_turn.current_hand().value,
                 dealer_hand.showing(),
             )
         }
         GameState::PlayerSplit { player_turn, dealer_hand, .. } => {
             format!(
                 "Split\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_turn.current_hand().value,
                 dealer_hand.showing(),
             )
         }
         GameState::DealFirstSplitCard { player_turn, new_hand, dealer_hand, .. } => {
             format!(
                 "DealFirstSplitCard\nPlayer: {}\nNew Hand: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_turn.current_hand().value,
                 new_hand.value,
                 dealer_hand.showing(),
             )
@@ -196,7 +196,7 @@ fn game_text(game_state: &GameState) -> String {
         GameState::DealSecondSplitCard { player_turn, new_hand, dealer_hand, .. } => {
             format!(
                 "DealSecondSplitCard\nPlayer: {}\nNew Hand: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_turn.current_hand().value,
                 new_hand.value,
                 dealer_hand.showing(),
             )
@@ -204,7 +204,7 @@ fn game_text(game_state: &GameState) -> String {
         GameState::PlayerSurrender { player_turn, dealer_hand, .. } => {
             format!(
                 "Surrender\nPlayer: {}\nDealer showing: {}",
-                player_turn.current_hand.value,
+                player_turn.current_hand().value,
                 dealer_hand.showing(),
             )
         }
