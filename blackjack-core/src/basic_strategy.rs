@@ -5,7 +5,7 @@
 //! This makes a best-effort attempt to consider the rules of the game, but is not perfect.
 
 use crate::game::{HandAction, Table};
-use crate::card::hand::{DealerHand, PlayerHand, PlayerTurn};
+use crate::card::hand::{DealerHand, PlayerHand, ActiveTurn};
 use crate::composed;
 
 #[must_use]
@@ -82,7 +82,7 @@ enum PreferredAction {
 
 /// Assuming 4-8 decks
 #[must_use]
-pub fn play_hand(table: &Table, player_hands: &PlayerTurn, dealer_hand: &DealerHand) -> HandAction {
+pub fn play_hand(table: &Table, player_hands: &ActiveTurn, dealer_hand: &DealerHand) -> HandAction {
     let preferred = match (player_hands.current_hand().value.soft, table.check_split_allowed(player_hands).is_ok()) {
         (false, false) => make_move_hard(table, &player_hands.current_hand(), dealer_hand),
         (true, false) => make_move_soft(&player_hands.current_hand(), dealer_hand),

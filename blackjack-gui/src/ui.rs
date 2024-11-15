@@ -150,7 +150,7 @@ fn game_text(game_state: &GameState) -> String {
                 },
             )
         }
-        GameState::PlayPlayerTurn { player_turn, dealer_hand, .. } => {
+        GameState::PlayPlayerTurn { current_turn: player_turn, dealer_hand, .. } => {
             format!(
                 "PlayPlayerTurn\nPlayer: {}\nDealer showing: {}",
                 player_turn.current_hand().value,
@@ -208,7 +208,7 @@ fn game_text(game_state: &GameState) -> String {
                 dealer_hand.showing(),
             )
         }
-        GameState::RevealHoleCard { finished_hands, dealer_hand, .. } => {
+        GameState::RevealHoleCard { finished_turns: finished_hands, dealer_hand, .. } => {
             format!(
                 "The dealer reveals his hole card...\nPlayer: {}\nDealer showing: {}",
                 finished_hands.iter().fold(
@@ -222,7 +222,7 @@ fn game_text(game_state: &GameState) -> String {
                 dealer_hand.showing(),
             )
         }
-        GameState::PlayDealerTurn { finished_hands, dealer_hand, .. } => {
+        GameState::PlayDealerTurn { finished_turns: finished_hands, dealer_hand, .. } => {
             format!(
                 "PlayDealerTurn\nPlayer: {}\nDealer: {}",
                 finished_hands.iter().fold(
@@ -236,7 +236,7 @@ fn game_text(game_state: &GameState) -> String {
                 dealer_hand.value,
             )
         }
-        GameState::RoundOver { finished_hands, dealer_hand, .. } => {
+        GameState::RoundOver { finished_turns: finished_hands, dealer_hand, .. } => {
             let announcement = match &dealer_hand.status {
                 Status::Blackjack => "Dealer has blackjack!".to_string(),
                 Status::Bust => "Dealer busts!".to_string(),

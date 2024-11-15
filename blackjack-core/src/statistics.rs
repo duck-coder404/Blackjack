@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
 use std::fmt::Display;
-use crate::card::hand::{DealerHand, PlayerHand, Status};
+use crate::card::hand::{DealerHand, FinishedTurn, PlayerHand, Status};
 
 #[derive(Debug, Default)]
 pub struct Statistics {
+    rounds_played: usize,
     turns_played: usize,
     hands_played: usize,
     total_bet: usize,
@@ -21,6 +22,7 @@ impl Statistics {
     #[must_use]
     pub const fn new() -> Self {
         Self {
+            rounds_played: 0,
             turns_played: 0,
             hands_played: 0,
             total_bet: 0,
@@ -36,22 +38,24 @@ impl Statistics {
     }
 
     /// Update the statistics with the results of a round of blackjack.
-    pub fn update(&mut self, player_hands: Vec<PlayerHand>, dealer_hand: DealerHand) {
-        self.turns_played += 1;
-        self.hands_played += player_hands.len();
-        for hand in &player_hands {
+    pub fn update(&mut self, player_turns: Vec<FinishedTurn>, dealer_hand: DealerHand) {
+        self.rounds_played += 1;
+        self.turns_played += player_turns.len();
+        self.hands_played += player_turns.iter().map(|t| t.hands.len()).sum::<usize>();
+        for hand in player_turns.iter().flat_map(|t| &t.hands) {
             match hand.status {
                 Status::Blackjack => self.blackjacks += 1,
                 Status::Bust => self.busts += 1,
                 _ => {},
             }
-            match hand.winnings.cmp(&hand.bet) {
-                Ordering::Greater => self.wins += 1,
-                Ordering::Equal => self.pushes += 1,
-                Ordering::Less => self.losses += 1,
-            }
+            // TODO: Handle winning statistics
+            // match hand.winnings.cmp(&hand.bet) {
+            //     Ordering::Greater => self.wins += 1,
+            //     Ordering::Equal => self.pushes += 1,
+            //     Ordering::Less => self.losses += 1,
+            // }
             self.total_bet = self.total_bet.saturating_add(hand.bet as usize);
-            self.total_won = self.total_won.saturating_add(hand.winnings as usize);
+            // self.total_won = self.total_won.saturating_add(hand.winnings as usize);
         }
         match dealer_hand.status {
             Status::Blackjack => self.dealer_blackjacks += 1,

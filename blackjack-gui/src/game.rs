@@ -16,7 +16,7 @@ pub struct Blackjack {
 
 impl Blackjack {
     pub fn new() -> Self {
-        let table = Table::new(50000, Shoe::new(4, 0.50), Rules::default());
+        let table = Table::new(Shoe::new(4, 0.50), Rules::default());
         let game_state = GameState::Betting;
         let input_field = InputField::from_game(&game_state, &table);
         Self { table, game_state, input_field, last_error: None }
@@ -72,7 +72,7 @@ impl Blackjack {
                 basic_strategy::surrender_early(&self.table, player_hand, dealer_hand),
             )),
             GameState::OfferInsurance { .. } => Some(Input::Bet(basic_strategy::bet_insurance())),
-            GameState::PlayPlayerTurn { player_turn, dealer_hand, .. } => Some(Input::Action(
+            GameState::PlayPlayerTurn { current_turn: player_turn, dealer_hand, .. } => Some(Input::Action(
                 basic_strategy::play_hand(&self.table, player_turn, dealer_hand),
             )),
             _ => None,

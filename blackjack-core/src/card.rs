@@ -204,10 +204,10 @@ pub mod hand {
 
     impl AddAssign<Card> for DealerHand {
         /// Adds a card to the dealer's hand.
-        fn add_assign(&mut self, rhs: Card) {
+        fn add_assign(&mut self, card: Card) {
             debug_assert_eq!(self.status, Status::InPlay, "cannot add to finished hand");
-            self.value += &rhs;
-            self.cards.push(rhs);
+            self.value += &card;
+            self.cards.push(card);
             self.status = match (self.value.soft, self.value.total) {
                 (true, 17) if self.hits_on_soft_17() => Status::InPlay,
                 (true, 21) if self.cards.len() == 2 => Status::Blackjack,
@@ -242,6 +242,13 @@ pub mod hand {
             self.soft_17_action == DealerSoft17Action::Hit
         }
     }
+    
+    /// Represents the player's bet and insurance bet.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct PlayerBet {
+        pub bet: u32,
+        pub insurance_bet: u32,
+    }
 
     /// Represents a hand of cards held by the player.
     #[derive(Debug, PartialEq, Eq)]
@@ -250,20 +257,18 @@ pub mod hand {
         pub bet: u32,
         /// The value of this hand
         pub value: Value,
-        /// The status of this hand
+        /// The status of this hand, e.g. InPlay, Stood, Bust, Blackjack, Surrendered
         pub status: Status,
         /// The cards in this hand (non-empty at all times)
         pub cards: Vec<Card>,
-        /// The player's winnings on this hand
-        pub winnings: u32,
     }
 
     impl AddAssign<Card> for PlayerHand {
         /// Adds a card to the player's hand.
-        fn add_assign(&mut self, rhs: Card) {
+        fn add_assign(&mut self, card: Card) {
             debug_assert_eq!(self.status, Status::InPlay, "cannot add to finished hand");
-            self.value += &rhs;
-            self.cards.push(rhs);
+            self.value += &card;
+            self.cards.push(card);
             self.status = match self.value.total {
                 22.. => Status::Bust,
                 21 if self.size() == 2 => Status::Blackjack,
@@ -282,7 +287,6 @@ pub mod hand {
                 value: Value::from(&card),
                 status: Status::InPlay,
                 cards: vec![card],
-                winnings: 0,
             }
         }
 
@@ -399,32 +403,55 @@ pub mod hand {
             0
         }
     }
+    
+    /// A player turn waiting to be played.
+    /// The insurance bet is separate from the hand because there is only a single insurance bet
+    /// regardless of whether the hand is split later.
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct PendingTurn {
+        /// The player's currently only hand
+        pub hand: PlayerHand,
+        /// The insurance bet on this hand
+        pub insurance_bet: u32,
+    }
+    
+    impl From<PlayerHand> for PendingTurn {
+        fn from(hand: PlayerHand) -> Self {
+            Self {
+                hand,
+                insurance_bet: 0,
+            }
+        }
+    }
 
     /// All the player's hands in a round of blackjack.
     /// This always starts with just one hand, but the player might split it into arbitrarily many.
     /// Split hands are pushed onto the vec.
     /// The player plays each hand in turn, and the hands are resolved in the order they were split.
     #[derive(Debug, PartialEq, Eq)]
-    pub struct PlayerTurn {
+    pub struct ActiveTurn {
         /// The hands in the player's turn, initially just their starting hand.
         /// This will only grow in size if the player splits.
         hands: Vec<PlayerHand>,
         /// The index of the hand the player is currently playing.
         /// u8 is more than sufficient for the number of hands the player could realistically split
         current_hand_index: usize,
+        /// The insurance bet. At this point we already know whether it will pay out.
+        insurance_bet: u32,
     }
 
     /// Convenience implementation to convert a player hand into a player turn.
-    impl From<PlayerHand> for PlayerTurn {
-        fn from(hand: PlayerHand) -> Self {
+    impl From<PendingTurn> for ActiveTurn {
+        fn from(turn: PendingTurn) -> Self {
             Self {
-                hands: vec![hand],
+                hands: vec![turn.hand],
                 current_hand_index: 0,
+                insurance_bet: turn.insurance_bet,
             }
         }
     }
 
-    impl PlayerTurn {
+    impl ActiveTurn {
         /// Returns a mutable reference to the current hand.
         pub fn current_hand_mut(&mut self) -> &mut PlayerHand {
             &mut self.hands[self.current_hand_index]
@@ -450,15 +477,55 @@ pub mod hand {
         /// This ensures that finished hands are not played again, and we eventually
         /// play all hands to completion in the order they were split.
         /// If there are no more hands to play, Self is deconstructed and Err(hands) is returned.
-        pub fn continue_playing(mut self) -> Result<Self, Vec<PlayerHand>> {
+        pub fn continue_playing(mut self) -> Result<Self, FinishedTurn> {
             if let Some(position) = self.hands.iter()
                 .skip(self.current_hand_index)
                 .position(|hand| hand.status == Status::InPlay) {
                 self.current_hand_index += position;
                 Ok(self)
             } else {
-                Err(self.hands)
+                Err(FinishedTurn {
+                    hands: self.hands,
+                    insurance_bet: self.insurance_bet
+                })
             }
+        }
+    }
+
+    /// A player turn which has been played to completion.
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct FinishedTurn {
+        /// The finished hands.
+        /// None have Status::InPlay anymore.
+        pub hands: Vec<PlayerHand>,
+        /// The insurance bet.
+        pub insurance_bet: u32,
+    }
+
+    /// A turn can go straight from pending to finished if it never enters play
+    /// This can happen in the case of Blackjack, surrender, ...
+    impl From<PendingTurn> for FinishedTurn {
+        fn from(turn: PendingTurn) -> Self {
+            Self {
+                hands: vec![turn.hand],
+                insurance_bet: turn.insurance_bet,
+            }
+        }
+    }
+    
+    impl FinishedTurn {
+        pub fn total_bet(&self) -> u32 {
+            self.hands.iter().map(|hand| hand.bet).sum::<u32>() + self.insurance_bet
+        }
+        pub fn calculate_winnings(&self, dealer_hand: &DealerHand, blackjack_payout: BlackjackPayout) -> u32 {
+            let insurance_winnings = if dealer_hand.status == Status::Blackjack {
+                self.insurance_bet * 2
+            } else {
+                0
+            };
+            insurance_winnings + self.hands.iter()
+                .map(|hand| hand.calculate_winnings(dealer_hand, blackjack_payout))
+                .sum::<u32>()
         }
     }
 
@@ -499,6 +566,8 @@ pub mod hand {
         });
     }
 }
+
+mod deck;
 
 pub mod shoe {
     use rand::thread_rng;
