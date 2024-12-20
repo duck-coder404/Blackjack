@@ -485,7 +485,7 @@ pub mod hand {
                 Ok(self)
             } else {
                 Err(FinishedTurn {
-                    hands: self.hands,
+                    hands: self.hands.into_boxed_slice(),
                     insurance_bet: self.insurance_bet
                 })
             }
@@ -497,7 +497,7 @@ pub mod hand {
     pub struct FinishedTurn {
         /// The finished hands.
         /// None have Status::InPlay anymore.
-        pub hands: Vec<PlayerHand>,
+        pub hands: Box<[PlayerHand]>,
         /// The insurance bet.
         pub insurance_bet: u32,
     }
@@ -507,7 +507,7 @@ pub mod hand {
     impl From<PendingTurn> for FinishedTurn {
         fn from(turn: PendingTurn) -> Self {
             Self {
-                hands: vec![turn.hand],
+                hands: vec![turn.hand].into_boxed_slice(),
                 insurance_bet: turn.insurance_bet,
             }
         }
