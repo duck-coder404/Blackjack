@@ -7,4 +7,4 @@ edition = "2021"
 blackjack-core = { path = "../blackjack-core" }
 clap = { version = "4.5.1", features = ["derive"] }
 ratatui = "0.29"
-crossterm =  "0.29" 
+crossterm =  "0.29"
